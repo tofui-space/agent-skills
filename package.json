@@ -1,0 +1,35 @@
+{
+  "name": "@tofui-space/agent-skills",
+  "version": "0.1.0",
+  "description": "Install agent skills and rules from the tofui-space catalog into any working directory.",
+  "type": "module",
+  "bin": {
+    "agent-skills": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "rules",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit",
+    "dev": "node --experimental-strip-types src/cli.ts",
+    "prepare": "tsc -p .",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tofui-space/agent-skills.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.17.0",
+    "typescript": "^7.0.2"
+  }
+}
