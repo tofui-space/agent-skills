@@ -1,0 +1,629 @@
+{
+  "_meta": {
+    "skill": "developer-experience",
+    "purpose": "Per-entry coverage ledger and source of truth for completion/depth/richness/sources/confidence. The skill reads it at runtime to surface confidence; we deepen stub/seeded/low entries over time.",
+    "scheme": "Activity (axis1) x Mechanism (axis2); altitude = tag; context = per-claim modifier; constraint regime = hard gate. Knowledge stored as CONDITIONAL RULES, not reflexes.",
+    "field_definitions": {
+      "status": [
+        "stub",
+        "seeded (claim, weak/no source)",
+        "sourced (>=1 live source)",
+        "drafted (sourced + nuanced / design-stable)",
+        "reviewed (user-validated)"
+      ],
+      "depth": "0 none / 1 shallow / 2 moderate / 3 deep",
+      "richness": "0 sparse / 1 some angles / 2 multi-axis+examples / 3 exhaustive",
+      "sources.tiers": "E empirical / Ep empirical-perceptual / C consensus / O opinion",
+      "confidence": "low / medium / high"
+    },
+    "sweeps": [
+      {
+        "name": "wide-sweep-1",
+        "date": "2026-06-10T00:00:00Z",
+        "scope": "interim breadth (~11 searches) under old altitude-silo layout"
+      },
+      {
+        "name": "research-full-sweep",
+        "date": "2026-06-10T16:00:00Z",
+        "scope": "extended research: definitions, contested tradeoffs, altitude evidence, constraints/regulatory, alignment. Proposed + adopted Activity x Mechanism scheme; restructured references.",
+        "next": [
+          "deepen tradeoff/conventions, tooling thresholds",
+          "testing & debugging/observability DX",
+          "dependency-update + supply-chain friction quantification",
+          "AI-assisted coding effect on DX",
+          "per-platform context profiles",
+          "re-verify EN 301 549 WCAG 2.1 vs 2.2; NIS2 transposition"
+        ]
+      },
+      {
+        "name": "language-framework-sweep",
+        "date": "2026-07-22T00:00:00Z",
+        "scope": "Per-language rows (Python, C#/.NET, C/C++, Rust, Go, Zig-lite) + framework rows in contexts.md; real-time audio callback gate in constraints.md; SKILL.md pointers updated.",
+        "next": [
+          "empirical sources for language-row claims (currently ecosystem-doc [C])",
+          "verify versioned claims against current docs at use time (fast-rot territory)"
+        ]
+      }
+    ],
+    "superseded": "old files general/design/architecture/tooling/documentation.md (altitude silos) removed; content migrated into mechanisms/activities/tradeoffs."
+  },
+  "entries": [
+    {
+      "id": "skill/model",
+      "file": "SKILL.md",
+      "type": "model",
+      "status": "drafted",
+      "depth": 3,
+      "richness": 2,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "E",
+          "C"
+        ]
+      },
+      "confidence": "high",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Activity x Mechanism; mechanisms empirically grounded."
+    },
+    {
+      "id": "skill/protocol",
+      "file": "SKILL.md",
+      "type": "protocol",
+      "status": "drafted",
+      "depth": 3,
+      "richness": 2,
+      "sources": {
+        "count": 0,
+        "tiers": []
+      },
+      "confidence": "high",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "6 steps: context, gate, activities, conditional-rule resolve, weighted-min+alignment, elicit."
+    },
+    {
+      "id": "skill/conditional-rule-mandate",
+      "file": "SKILL.md",
+      "type": "principle",
+      "status": "drafted",
+      "depth": 3,
+      "richness": 2,
+      "sources": {
+        "count": 0,
+        "tiers": []
+      },
+      "confidence": "high",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "prefer-X-when/not-X-when/overridden-by; reflexes rejected as rules."
+    },
+    {
+      "id": "skill/paths",
+      "file": "SKILL.md",
+      "type": "paths",
+      "status": "drafted",
+      "depth": 3,
+      "richness": 2,
+      "sources": {
+        "count": 0,
+        "tiers": []
+      },
+      "confidence": "high",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "silent / review / redesign / decide / elicit."
+    },
+    {
+      "id": "mechanism/foundations",
+      "file": "mechanisms.md",
+      "type": "foundation",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 2,
+      "sources": {
+        "count": 6,
+        "tiers": [
+          "E",
+          "Ep",
+          "C"
+        ]
+      },
+      "confidence": "high",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Fagerholm&Munch, Greiler, DevEx 2023, DevEx-in-Action, SPACE, Graziotin, Sweller."
+    },
+    {
+      "id": "mechanism/feedback-loops",
+      "file": "mechanisms.md",
+      "type": "mechanism",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "E",
+          "C"
+        ]
+      },
+      "confidence": "high",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Optimize high-frequency loop. DEPTH: thresholds, flaky-test cost."
+    },
+    {
+      "id": "mechanism/cognitive-load",
+      "file": "mechanisms.md",
+      "type": "mechanism",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 2,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "E",
+          "C"
+        ]
+      },
+      "confidence": "high",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Intrinsic/extraneous/germane; most tradeoffs are extraneous-load args."
+    },
+    {
+      "id": "mechanism/flow",
+      "file": "mechanisms.md",
+      "type": "mechanism",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 1,
+        "tiers": [
+          "Ep"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Strongest predictor in DevEx-in-Action (perceptual)."
+    },
+    {
+      "id": "activity/weighting",
+      "file": "activities.md",
+      "type": "principle",
+      "status": "drafted",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 0,
+        "tiers": []
+      },
+      "confidence": "high",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Weight by frequency; optimizing rare activity at frequent one's expense = top error."
+    },
+    {
+      "id": "activity/profiles",
+      "file": "activities.md",
+      "type": "activity",
+      "status": "seeded",
+      "depth": 1,
+      "richness": 1,
+      "sources": {
+        "count": 1,
+        "tiers": [
+          "C"
+        ]
+      },
+      "confidence": "low",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "11 activities seeded; most shallow. DEPTH each."
+    },
+    {
+      "id": "activity/reviewing",
+      "file": "activities.md",
+      "type": "activity",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 1,
+        "tiers": [
+          "E"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Bacchelli&Bird: review = understanding + knowledge transfer, not defects."
+    },
+    {
+      "id": "activity/understanding-design",
+      "file": "activities.md",
+      "type": "activity",
+      "status": "sourced",
+      "depth": 1,
+      "richness": 1,
+      "sources": {
+        "count": 1,
+        "tiers": [
+          "Ep"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "~+42% felt productivity when high (DevEx-in-Action)."
+    },
+    {
+      "id": "tradeoff/dry-abstraction",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 2,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "O"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Volatility/discoverability/maintenance axes. Strong consensus, thin empirical."
+    },
+    {
+      "id": "tradeoff/comments",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 2,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "E",
+          "O"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "why>what; reader-expertise modifier."
+    },
+    {
+      "id": "tradeoff/complexity-length",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "E"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "CC weak/contested; size proxy; smell-flag only."
+    },
+    {
+      "id": "tradeoff/coupling",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 2,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "E"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Structural != logical/co-change; boundaries on co-change fracture planes."
+    },
+    {
+      "id": "tradeoff/naming",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 3,
+        "tiers": [
+          "E"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Full words ~+19% comprehension; ~70% of chars; expertise modifier."
+    },
+    {
+      "id": "tradeoff/conventions",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "seeded",
+      "depth": 1,
+      "richness": 2,
+      "sources": {
+        "count": 0,
+        "tiers": [
+          "C",
+          "O"
+        ]
+      },
+      "confidence": "low",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Age/prevalence/novelty=proxies for fit. DEPTH: style-guide rationale."
+    },
+    {
+      "id": "tradeoff/api-design",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "E"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Few required params; reachable methods; constructors>factories; least astonishment."
+    },
+    {
+      "id": "tradeoff/parse-dont-validate",
+      "file": "tradeoffs.md",
+      "type": "rule-alignment",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 2,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "O",
+          "C"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Boundary types; idiom break-axis. Cross-ref constraints."
+    },
+    {
+      "id": "tradeoff/architecture-styles",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 2,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "E"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Context decision not ladder; Prime Video reversal; modular monolith. Grey/mixed evidence."
+    },
+    {
+      "id": "tradeoff/boundaries-conway",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 1,
+        "tiers": [
+          "C",
+          "O"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Team-sized boundaries; reverse-Conway; fracture planes."
+    },
+    {
+      "id": "tradeoff/documentation",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "C"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Diataxis (type-to-need) + ADRs (Nygard)."
+    },
+    {
+      "id": "tradeoff/tooling-platform",
+      "file": "tradeoffs.md",
+      "type": "rule",
+      "status": "sourced",
+      "depth": 1,
+      "richness": 1,
+      "sources": {
+        "count": 1,
+        "tiers": [
+          "C",
+          "E"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "Inner-loop speed + reproducible env + golden paths. DEPTH: thresholds."
+    },
+    {
+      "id": "constraints/security",
+      "file": "constraints.md",
+      "type": "gate",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 1,
+        "tiers": [
+          "C"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "OWASP A04 Insecure Design + ASVS."
+    },
+    {
+      "id": "constraints/safety-realtime",
+      "file": "constraints.md",
+      "type": "gate",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 1,
+      "sources": {
+        "count": 3,
+        "tiers": [
+          "C"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-07-22T00:00:00Z",
+      "notes": "MISRA no-dynamic-alloc; DO-178C/ISO26262/IEC61508/ECSS; real-time audio callback discipline (Bencina)."
+    },
+    {
+      "id": "constraints/regulatory",
+      "file": "constraints.md",
+      "type": "gate",
+      "status": "sourced",
+      "depth": 1,
+      "richness": 1,
+      "sources": {
+        "count": 4,
+        "tiers": [
+          "C"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "GDPR/NIS2/DORA(reg vs metrics)/EAA-WCAG. Flux: verify transposition + EN301549 WCAG version."
+    },
+    {
+      "id": "constraints/alignment-catalogue",
+      "file": "constraints.md",
+      "type": "alignment",
+      "status": "sourced",
+      "depth": 2,
+      "richness": 2,
+      "sources": {
+        "count": 2,
+        "tiers": [
+          "C",
+          "O"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-06-10T16:00:00Z",
+      "notes": "7 moves w/ break-axes (least-priv, narrow iface, immutability, typing, fail-closed, explicit flow, fewer deps/SLSA)."
+    },
+    {
+      "id": "context/axes",
+      "file": "contexts.md",
+      "type": "modifier",
+      "status": "drafted",
+      "depth": 1,
+      "richness": 1,
+      "sources": {
+        "count": 0,
+        "tiers": [
+          "C"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-06-10T16:00:00Z",
+      "modified": "2026-07-22T00:00:00Z",
+      "notes": "4 axes: language/idiom, platform, team, maturity — flip rules. Language axis expanded into per-language/framework rows."
+    },
+    {
+      "id": "context/regulated-row",
+      "file": "contexts.md",
+      "type": "modifier",
+      "status": "seeded",
+      "depth": 0,
+      "richness": 1,
+      "sources": {
+        "count": 0,
+        "tiers": []
+      },
+      "confidence": "low",
+      "created": "2026-06-10T00:00:00Z",
+      "modified": "2026-07-22T00:00:00Z",
+      "notes": "Reweights to understanding+reviewing; gate via constraints.md."
+    },
+    {
+      "id": "context/languages",
+      "file": "contexts.md",
+      "type": "modifier",
+      "status": "sourced",
+      "depth": 1,
+      "richness": 2,
+      "sources": {
+        "count": 3,
+        "tiers": [
+          "C"
+        ]
+      },
+      "confidence": "medium",
+      "created": "2026-07-22T00:00:00Z",
+      "modified": "2026-07-22T00:00:00Z",
+      "notes": "Python, C#/.NET, C/C++, Rust, Go rows + Zig one-liner. Idiom shifts to rule defaults + alignment break-axes. Sources: PEP 8, Rust API guidelines, Go proverbs."
+    },
+    {
+      "id": "context/frameworks",
+      "file": "contexts.md",
+      "type": "modifier",
+      "status": "seeded",
+      "depth": 1,
+      "richness": 1,
+      "sources": {
+        "count": 0,
+        "tiers": [
+          "C"
+        ]
+      },
+      "confidence": "low",
+      "created": "2026-07-22T00:00:00Z",
+      "modified": "2026-07-22T00:00:00Z",
+      "notes": "TS/JS (React/Next/Vite/Ladle/TanStack/Drizzle-Prisma/Fastify-Express/tRPC-ts-rest/React Aria/Astro/Web Components/Tailwind), Python web (FastAPI/Litestar/DRF), OpenAPI 3.1+, Rust (Axum/Actix/Dioxus), .NET web (Minimal API/Razor Pages/EF Core). Fast-rot: verify current docs at use time."
+    }
+  ]
+}
