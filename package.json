@@ -14,7 +14,9 @@
   ],
   "scripts": {
     "build": "tsc -p .",
-    "typecheck": "tsc -p . --noEmit",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "node --experimental-strip-types --test 'test/*.test.ts'",
+    "test:watch": "node --experimental-strip-types --test --watch 'test/*.test.ts'",
     "dev": "node --experimental-strip-types src/cli.ts",
     "prepare": "tsc -p .",
     "lint": "biome check .",
