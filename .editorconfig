@@ -1,0 +1,5 @@
+# Biome has no markdown formatter, so markdown formatting is governed here.
+# Everything else IntelliJ exported matched its own defaults and was dropped.
+
+[{*.markdown,*.md}]
+ij_markdown_wrap_text_if_long = false
