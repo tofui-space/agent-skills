@@ -38,6 +38,21 @@ export interface Catalog {
 
 export type InstallMode = 'copy' | 'link'
 
+export type AgentId = 'claude' | 'codex'
+
+/** How prose rules reach an agent, since only Claude Code reads rule files. */
+export type RuleDelivery = 'files' | 'agents-md'
+
+export interface AgentDefinition {
+  readonly id: AgentId
+  readonly label: string
+  /** Environment variable that relocates the agent's global config directory. */
+  readonly homeEnv: string
+  /** Directory name used both under the home directory and inside a project. */
+  readonly configDir: string
+  readonly ruleDelivery: RuleDelivery
+}
+
 export interface ManifestEntry {
   readonly type: CatalogEntry['type']
   readonly id: string

@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 import path from 'node:path'
+import { AGENT_IDS, parseAgents } from './agents.ts'
 import { loadCatalog, selectEntries } from './catalog.ts'
 import {
+  agentsFileFor,
   inspect,
   install,
+  isFileDelivered,
   readManifest,
+  syncAgentsFile,
   targetRoot,
+  trackedRules,
   uninstall,
   writeManifest,
 } from './install.ts'
@@ -16,10 +21,15 @@ import {
   resolveSource,
   syncCache,
 } from './source.ts'
-import type { Catalog, CatalogEntry, InstallMode } from './types.ts'
+import type {
+  AgentDefinition,
+  Catalog,
+  CatalogEntry,
+  InstallMode,
+} from './types.ts'
 
 /** Flags that consume the following argument; every other flag is boolean. */
-const VALUE_FLAGS = new Set(['from', 'repo', 'ref', 'dir'])
+const VALUE_FLAGS = new Set(['from', 'repo', 'ref', 'dir', 'agent'])
 
 interface Args {
   readonly command: string
@@ -112,6 +122,17 @@ function openCatalog(args: Args): {
   }
 }
 
+function agentsFrom(args: Args): AgentDefinition[] {
+  return parseAgents(stringFlag(args, 'agent'))
+}
+
+function rootFor(args: Args, agent: AgentDefinition): string {
+  return targetRoot(agent, {
+    dir: stringFlag(args, 'dir'),
+    global: boolFlag(args, 'global', 'g'),
+  })
+}
+
 function describeEntry(entry: CatalogEntry): string {
   if (entry.type === 'skill') {
     const group = entry.category ? dim(` (${entry.category})`) : ''
@@ -145,6 +166,7 @@ function commandAdd(args: Args): void {
   const all = boolFlag(args, 'all')
   const mode: InstallMode = boolFlag(args, 'link') ? 'link' : 'copy'
   const force = boolFlag(args, 'force', 'f')
+  const agents = agentsFrom(args)
 
   const selectors = args.positionals
   if (!all && selectors.length === 0) {
@@ -162,40 +184,48 @@ function commandAdd(args: Args): void {
         return found
       })()
 
-  const root = targetRoot({
-    dir: stringFlag(args, 'dir'),
-    global: boolFlag(args, 'global', 'g'),
-  })
-  const manifest = readManifest(root)
   const cache = kind === 'cache' ? describeCache() : null
-
   console.log(dim(`catalog: ${dir} (${kind})`))
-  console.log(dim(`target:  ${root}`))
 
   let installed = 0
   let skipped = 0
 
-  for (const entry of chosen) {
-    const placement = inspect(entry, root, manifest)
-    if (placement.exists && !placement.tracked && !force) {
+  for (const agent of agents) {
+    const root = rootFor(args, agent)
+    const manifest = readManifest(root)
+    console.log(`\n${bold(agent.label)} ${dim(root)}`)
+
+    for (const entry of chosen) {
+      const placement = inspect(entry, agent, root, manifest)
+      if (placement.exists && !placement.tracked && !force) {
+        console.log(
+          `  skip    ${entry.type} ${entry.id} ${dim('(exists, not installed by this CLI; --force to replace)')}`,
+        )
+        skipped += 1
+        continue
+      }
+      install(entry, agent, root, manifest, {
+        mode,
+        origin: cache?.url ?? undefined,
+        commit: cache?.commit ?? undefined,
+      })
+      const where = isFileDelivered(entry, agent)
+        ? path.relative(root, placement.dest)
+        : path.basename(placement.dest)
       console.log(
-        `  skip    ${entry.type} ${entry.id} ${dim('(exists, not installed by this CLI; --force to replace)')}`,
+        `  ${placement.tracked ? 'update ' : 'install'} ${entry.type} ${entry.id} ${dim(`→ ${where}`)}`,
       )
-      skipped += 1
-      continue
+      installed += 1
     }
-    install(entry, root, manifest, {
-      mode,
-      origin: cache?.url ?? undefined,
-      commit: cache?.commit ?? undefined,
-    })
-    console.log(
-      `  ${placement.tracked ? 'update ' : 'install'} ${entry.type} ${entry.id} ${dim(`→ ${path.relative(root, placement.dest)}`)}`,
-    )
-    installed += 1
+
+    writeManifest(root, manifest)
+    if (agent.ruleDelivery === 'agents-md') {
+      const file = agentsFileFor(root)
+      syncAgentsFile(file, trackedRules(manifest, catalog.rules))
+      console.log(dim(`  rules folded into ${file}`))
+    }
   }
 
-  writeManifest(root, manifest)
   console.log(`\n${installed} installed, ${skipped} skipped.`)
   if (mode === 'link')
     console.log(dim('Linked entries track the catalog directory directly.'))
@@ -203,11 +233,7 @@ function commandAdd(args: Args): void {
 
 function commandRemove(args: Args): void {
   const { catalog } = openCatalog(args)
-  const root = targetRoot({
-    dir: stringFlag(args, 'dir'),
-    global: boolFlag(args, 'global', 'g'),
-  })
-  const manifest = readManifest(root)
+  const agents = agentsFrom(args)
 
   if (args.positionals.length === 0)
     throw new Error('Name at least one installed skill or rule to remove.')
@@ -216,17 +242,26 @@ function commandRemove(args: Args): void {
   if (missing.length)
     throw new Error(`Not found in the catalog: ${missing.join(', ')}`)
 
-  for (const entry of chosen) {
-    const placement = inspect(entry, root, manifest)
-    if (!placement.exists) {
-      console.log(`  absent  ${entry.type} ${entry.id}`)
-      continue
-    }
-    uninstall(entry, root, manifest)
-    console.log(`  removed ${entry.type} ${entry.id}`)
-  }
+  for (const agent of agents) {
+    const root = rootFor(args, agent)
+    const manifest = readManifest(root)
+    console.log(`\n${bold(agent.label)} ${dim(root)}`)
 
-  writeManifest(root, manifest)
+    for (const entry of chosen) {
+      const placement = inspect(entry, agent, root, manifest)
+      if (!placement.exists) {
+        console.log(`  absent  ${entry.type} ${entry.id}`)
+        continue
+      }
+      uninstall(entry, agent, root, manifest)
+      console.log(`  removed ${entry.type} ${entry.id}`)
+    }
+
+    writeManifest(root, manifest)
+    if (agent.ruleDelivery === 'agents-md') {
+      syncAgentsFile(agentsFileFor(root), trackedRules(manifest, catalog.rules))
+    }
+  }
 }
 
 function commandSync(args: Args): void {
@@ -263,19 +298,17 @@ function commandStatus(args: Args): void {
     `  ${count(catalog.skills.length, 'skill')}, ${count(catalog.rules.length, 'rule')}`,
   )
 
-  const root = targetRoot({
-    dir: stringFlag(args, 'dir'),
-    global: boolFlag(args, 'global', 'g'),
-  })
-  const manifest = readManifest(root)
-  const entries = Object.values(manifest.entries)
-  console.log(`\n${bold('installed')}`)
-  console.log(`  ${root}`)
-  if (entries.length === 0) console.log(dim('  nothing installed here'))
-  for (const entry of entries) {
-    console.log(
-      `  ${entry.type} ${entry.id} ${dim(`${entry.mode}, ${entry.installedAt.slice(0, 10)}`)}`,
-    )
+  for (const agent of agentsFrom(args)) {
+    const root = rootFor(args, agent)
+    const entries = Object.values(readManifest(root).entries)
+    console.log(`\n${bold(`installed — ${agent.label}`)}`)
+    console.log(`  ${root}`)
+    if (entries.length === 0) console.log(dim('  nothing installed here'))
+    for (const entry of entries) {
+      console.log(
+        `  ${entry.type} ${entry.id} ${dim(`${entry.mode}, ${entry.installedAt.slice(0, 10)}`)}`,
+      )
+    }
   }
 }
 
@@ -287,14 +320,15 @@ ${bold('Usage')}
 
 ${bold('Commands')}
   list                     Show every skill and rule in the catalog
-  add <name...> | --all    Install skills and rules into .claude/
+  add <name...> | --all    Install skills and rules for the chosen agents
   remove <name...>         Remove previously installed entries
   sync                     Clone or fast-forward the catalog from the remote
   status                   Show remote, cache, active catalog and installs
 
 ${bold('Options')}
-  -g, --global             Target $CLAUDE_CONFIG_DIR, else ~/.claude
-      --dir <path>         Target <path>/.claude
+      --agent <list>       ${AGENT_IDS.join(', ')} or all (default claude)
+  -g, --global             Target the agent's home config directory
+      --dir <path>         Target <path>/<agent config dir>
       --link               Symlink to the catalog instead of copying
   -f, --force              Replace files this CLI did not install
       --from <path>        Use a catalog directory instead of the cache
@@ -303,8 +337,16 @@ ${bold('Options')}
       --skills / --rules   Restrict \`list\` to one kind
 
 ${bold('Where things land')}
-  skills → <target>/skills/<name>/            catalog category dropped
-  rules  → <target>/rules/<category>/<name>.md
+  Claude Code   skills → .claude/skills/<name>/        catalog category dropped
+                rules  → .claude/rules/<category>/<name>.md
+  Codex         skills → .codex/skills/<name>/
+                rules  → AGENTS.md, inside a managed block
+
+  Codex has no glob-scoped rule mechanism, so a rule's \`paths:\` frontmatter
+  is inlined as prose rather than enforced.
+
+  -g targets $CLAUDE_CONFIG_DIR / $CODEX_HOME, falling back to ~/.claude
+  and ~/.codex.
 
 ${bold('Environment')}
   TOFUI_SKILLS_REPO        Default remote URL
