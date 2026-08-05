@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 export function makeTempDir(prefix: string): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), `agent-skills-${prefix}-`))
+  return fs.mkdtempSync(path.join(os.tmpdir(), `tofui-skills-${prefix}-`))
 }
 
 export function writeFile(file: string, contents: string): string {

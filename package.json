@@ -4,7 +4,7 @@
   "description": "Install agent skills and rules from the tofui-space catalog into any working directory.",
   "type": "module",
   "bin": {
-    "agent-skills": "./dist/cli.js"
+    "tofui-skills": "./dist/cli.js"
   },
   "files": [
     "dist",

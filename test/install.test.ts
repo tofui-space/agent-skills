@@ -124,7 +124,7 @@ describe('manifest', () => {
   })
 
   test('treats an unparseable manifest as empty rather than throwing', () => {
-    writeFile(path.join(root, '.agent-skills.json'), '{ not json')
+    writeFile(path.join(root, '.tofui-skills.json'), '{ not json')
     assert.deepEqual(readManifest(root), { version: 1, entries: {} })
   })
 })

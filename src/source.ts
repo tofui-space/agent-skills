@@ -11,9 +11,9 @@ export const DEFAULT_REPO = 'https://github.com/tofui-space/agent-skills.git'
 const packageRoot = path.resolve(fileURLToPath(import.meta.url), '..', '..')
 
 export function cacheDir(): string {
-  const override = process.env.AGENT_SKILLS_HOME
+  const override = process.env.TOFUI_SKILLS_HOME
   if (override) return path.resolve(override)
-  return path.join(os.homedir(), '.cache', 'agent-skills')
+  return path.join(os.homedir(), '.cache', 'tofui-skills')
 }
 
 export function cacheRepoDir(): string {
@@ -21,7 +21,7 @@ export function cacheRepoDir(): string {
 }
 
 export function repoUrl(explicit?: string | undefined): string {
-  return explicit ?? process.env.AGENT_SKILLS_REPO ?? DEFAULT_REPO
+  return explicit ?? process.env.TOFUI_SKILLS_REPO ?? DEFAULT_REPO
 }
 
 function isCatalog(dir: string): boolean {
@@ -149,7 +149,7 @@ export function describeCache(): CacheInfo | null {
 export function resolveSource(
   explicitFrom?: string | undefined,
 ): ResolvedSource {
-  const explicit = explicitFrom ?? process.env.AGENT_SKILLS_SOURCE
+  const explicit = explicitFrom ?? process.env.TOFUI_SKILLS_SOURCE
   if (explicit) {
     const dir = path.resolve(explicit)
     if (!isCatalog(dir))
@@ -166,5 +166,5 @@ export function resolveSource(
 
   if (isCatalog(packageRoot)) return { dir: packageRoot, kind: 'bundled' }
 
-  throw new Error('No catalog available. Run `agent-skills sync` to fetch it.')
+  throw new Error('No catalog available. Run `tofui-skills sync` to fetch it.')
 }

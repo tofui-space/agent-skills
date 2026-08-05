@@ -149,7 +149,7 @@ function commandAdd(args: Args): void {
   const selectors = args.positionals
   if (!all && selectors.length === 0) {
     throw new Error(
-      'Name at least one skill or rule, or pass --all. `agent-skills list` shows both.',
+      'Name at least one skill or rule, or pass --all. `tofui-skills list` shows both.',
     )
   }
 
@@ -249,7 +249,7 @@ function commandStatus(args: Args): void {
   console.log(`  ${repoUrl(stringFlag(args, 'repo'))}`)
 
   console.log(`\n${bold('cache')}`)
-  if (!cache) console.log(dim('  not cloned yet — run `agent-skills sync`'))
+  if (!cache) console.log(dim('  not cloned yet — run `tofui-skills sync`'))
   else
     console.log(
       `  ${cache.dir}\n  ${cache.commit ?? 'unknown'} ${dim(cache.age ?? '')}`,
@@ -280,10 +280,10 @@ function commandStatus(args: Args): void {
 }
 
 function commandHelp(): void {
-  console.log(`${bold('agent-skills')} — install agent skills and rules into a working directory
+  console.log(`${bold('tofui-skills')} — install agent skills and rules into a working directory
 
 ${bold('Usage')}
-  agent-skills <command> [options]
+  tofui-skills <command> [options]
 
 ${bold('Commands')}
   list                     Show every skill and rule in the catalog
@@ -307,9 +307,9 @@ ${bold('Where things land')}
   rules  → <target>/rules/<category>/<name>.md
 
 ${bold('Environment')}
-  AGENT_SKILLS_REPO        Default remote URL
-  AGENT_SKILLS_SOURCE      Default catalog directory
-  AGENT_SKILLS_HOME        Cache location (default ~/.cache/agent-skills)
+  TOFUI_SKILLS_REPO        Default remote URL
+  TOFUI_SKILLS_SOURCE      Default catalog directory
+  TOFUI_SKILLS_HOME        Cache location (default ~/.cache/tofui-skills)
 `)
 }
 

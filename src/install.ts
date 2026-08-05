@@ -8,7 +8,7 @@ import type {
   ManifestEntry,
 } from './types.ts'
 
-const MANIFEST_FILE = '.agent-skills.json'
+const MANIFEST_FILE = '.tofui-skills.json'
 
 export interface TargetOptions {
   readonly dir?: string | undefined

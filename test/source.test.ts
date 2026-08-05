@@ -14,22 +14,22 @@ import {
 import { makeCatalog, makeTempDir, removeAll, writeFile } from './helpers.ts'
 
 const savedEnv = {
-  repo: process.env.AGENT_SKILLS_REPO,
-  source: process.env.AGENT_SKILLS_SOURCE,
-  home: process.env.AGENT_SKILLS_HOME,
+  repo: process.env.TOFUI_SKILLS_REPO,
+  source: process.env.TOFUI_SKILLS_SOURCE,
+  home: process.env.TOFUI_SKILLS_HOME,
 }
 
 function clearEnv(): void {
-  delete process.env.AGENT_SKILLS_REPO
-  delete process.env.AGENT_SKILLS_SOURCE
-  delete process.env.AGENT_SKILLS_HOME
+  delete process.env.TOFUI_SKILLS_REPO
+  delete process.env.TOFUI_SKILLS_SOURCE
+  delete process.env.TOFUI_SKILLS_HOME
 }
 
 after(() => {
   for (const [key, value] of [
-    ['AGENT_SKILLS_REPO', savedEnv.repo],
-    ['AGENT_SKILLS_SOURCE', savedEnv.source],
-    ['AGENT_SKILLS_HOME', savedEnv.home],
+    ['TOFUI_SKILLS_REPO', savedEnv.repo],
+    ['TOFUI_SKILLS_SOURCE', savedEnv.source],
+    ['TOFUI_SKILLS_HOME', savedEnv.home],
   ] as const) {
     if (value === undefined) delete process.env[key]
     else process.env[key] = value
@@ -40,7 +40,7 @@ describe('repoUrl', () => {
   afterEach(clearEnv)
 
   test('prefers an explicit override', () => {
-    process.env.AGENT_SKILLS_REPO = 'https://env.test/repo.git'
+    process.env.TOFUI_SKILLS_REPO = 'https://env.test/repo.git'
     assert.equal(
       repoUrl('https://explicit.test/repo.git'),
       'https://explicit.test/repo.git',
@@ -48,7 +48,7 @@ describe('repoUrl', () => {
   })
 
   test('falls back to the environment', () => {
-    process.env.AGENT_SKILLS_REPO = 'https://env.test/repo.git'
+    process.env.TOFUI_SKILLS_REPO = 'https://env.test/repo.git'
     assert.equal(repoUrl(), 'https://env.test/repo.git')
   })
 
@@ -61,18 +61,18 @@ describe('repoUrl', () => {
 describe('cacheDir', () => {
   afterEach(clearEnv)
 
-  test('honours AGENT_SKILLS_HOME', () => {
-    process.env.AGENT_SKILLS_HOME = '/tmp/agent-skills-cache-test'
-    assert.equal(cacheDir(), path.resolve('/tmp/agent-skills-cache-test'))
+  test('honours TOFUI_SKILLS_HOME', () => {
+    process.env.TOFUI_SKILLS_HOME = '/tmp/tofui-skills-cache-test'
+    assert.equal(cacheDir(), path.resolve('/tmp/tofui-skills-cache-test'))
     assert.equal(
       cacheRepoDir(),
-      path.join(path.resolve('/tmp/agent-skills-cache-test'), 'repo'),
+      path.join(path.resolve('/tmp/tofui-skills-cache-test'), 'repo'),
     )
   })
 
   test('defaults under the home directory', () => {
     clearEnv()
-    assert.match(cacheDir(), /[\\/]\.cache[\\/]agent-skills$/)
+    assert.match(cacheDir(), /[\\/]\.cache[\\/]tofui-skills$/)
   })
 })
 
@@ -98,8 +98,8 @@ describe('resolveSource', () => {
     assert.equal(source.dir, path.resolve(catalogRoot))
   })
 
-  test('reads AGENT_SKILLS_SOURCE when no argument is given', () => {
-    process.env.AGENT_SKILLS_SOURCE = catalogRoot
+  test('reads TOFUI_SKILLS_SOURCE when no argument is given', () => {
+    process.env.TOFUI_SKILLS_SOURCE = catalogRoot
     const source = resolveSource()
     assert.equal(source.kind, 'explicit')
     assert.equal(source.dir, path.resolve(catalogRoot))

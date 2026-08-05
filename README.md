@@ -12,8 +12,8 @@ Agent skills and rules to add to repositories, local, or remote settings of codi
 pnpm add -g git+https://github.com/tofui-space/agent-skills.git
 # or: npm i -g github:tofui-space/agent-skills
 
-agent-skills sync
-agent-skills list
+tofui-skills sync
+tofui-skills list
 ```
 
 `sync` pulls the latest catalog from GitHub. Reinstalling the CLI is only needed when the CLI itself changes.
@@ -23,9 +23,9 @@ agent-skills list
 Run the appropriate commands according to the scope you wish the skills/rules to apply.
 
 ```sh
-agent-skills add a11y-writing               # ./.claude — this project
-agent-skills add --all --global             # global config — every project
-agent-skills add anti-vacuity --dir ../app  # ../app/.claude
+tofui-skills add a11y-writing               # ./.claude — this project
+tofui-skills add --all --global             # global config — every project
+tofui-skills add anti-vacuity --dir ../app  # ../app/.claude
 ```
 
 | Flag            | Effect                                        |
@@ -45,11 +45,11 @@ Skills land in `.claude/skills/<name>/`, rules in `.claude/rules/<category>/<nam
 Being able to clean up after addons is important. Follow these steps to remove them.
 
 ```sh
-agent-skills status                         # what is installed where
-agent-skills remove a11y-writing            # from ./.claude
-agent-skills remove a11y-writing --global   # from ~/.claude
+tofui-skills status                         # what is installed where
+tofui-skills remove a11y-writing            # from ./.claude
+tofui-skills remove a11y-writing --global   # from ~/.claude
 pnpm remove -g @tofui-space/agent-skills    # uninstall the CLI
 ```
 
-Removal only touches entries recorded in `.claude/.agent-skills.json`. Files you wrote by hand are left alone, and
+Removal only touches entries recorded in `.claude/.tofui-skills.json`. Files you wrote by hand are left alone, and
 installing over one is skipped unless you pass `--force`.
