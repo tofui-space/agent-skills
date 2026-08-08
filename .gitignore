@@ -2,6 +2,9 @@
 node_modules/
 .pnpm-store/
 
+# Local AI settings
+/.claude
+
 # Build output
 dist/
 *.tsbuildinfo
