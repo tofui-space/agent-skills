@@ -165,6 +165,44 @@ Distinct from site 6: there the comparison carries nothing for the decision. Her
 
 Real synthesis earns its place when no industry consensus exists, when the user is weighing options against constraints unique to their project, or when credible patterns disagree and the trade-offs matter. When the industry has converged: state the pattern, cite three reference implementations, move on.
 
+### 11. Mid-document recap transitions
+
+Paragraph or section openers that summarize what the reader just read instead of adding to it.
+
+- "With this setup complete, ..."
+- "Now that we've covered X, ..."
+- "Having established Y, ..."
+
+The recap tells the reader nothing they don't already have from reading the prior section. Pivot straight to the next point instead.
+
+### 12. Templated scene-setting openers
+
+Generic framing sentences that could preface any document on the topic, not this one specifically.
+
+- "The question most teams face is whether..."
+- "There are several approaches to consider here."
+- "This is a common challenge in modern systems."
+
+A framing sentence informs when it states something specific to this document's decision. Otherwise it is decoration borrowed from a template.
+
+### 13. Vague quantifiers that disguise a known figure
+
+A quantifier ("several", "many", "some") standing in for a number the writer already has and that would change the reader's decision.
+
+- "I found several bugs" when the bugs were counted one by one while finding them.
+- "This is significantly faster" when a benchmark was run and produced a number.
+
+A vague quantifier informs when the exact figure would not change the reader's decision (three reasons are enough to abandon a path; the other 70 don't need enumerating) or when the figure genuinely is not known — in that case say so explicitly ("no measurement taken yet") rather than let the vague word imply the number wasn't worth stating. What fails the test is knowing the number and choosing not to state it.
+
+### 14. Passive voice concealing a relevant actor
+
+A passive construction that omits an actor the reader needs to know, when the actor is both known and relevant.
+
+- "The request is validated" when the reader needs to know what component validates it.
+- "Errors are logged" when the reader is debugging and needs to know which subsystem logs them.
+
+Passive voice informs when the actor is genuinely unknown or irrelevant to the point being made ("the file is created on first write" — nobody needs telling the filesystem does it). What fails the test is omitting a knowable, relevant actor, not the passive construction itself.
+
 ---
 
 ## Not vacuous
