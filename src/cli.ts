@@ -6,7 +6,9 @@ import {
   agentsFileFor,
   inspect,
   install,
+  isCurrent,
   isFileDelivered,
+  manifestKey,
   readManifest,
   syncAgentsFile,
   targetRoot,
@@ -26,6 +28,7 @@ import type {
   Catalog,
   CatalogEntry,
   InstallMode,
+  ResolvedSource,
 } from './types.ts'
 
 /** Flags that consume the following argument; every other flag is boolean. */
@@ -231,6 +234,130 @@ function commandAdd(args: Args): void {
     console.log(dim('Linked entries track the catalog directory directly.'))
 }
 
+/**
+ * Refreshes what the manifest already tracks, and nothing else: entries the
+ * CLI never installed are not selected, so no --force interplay exists here.
+ * Pulls the catalog first when the cache is the active source, making
+ * `tofui-skills update` a complete routine on its own.
+ */
+function commandUpdate(args: Args): void {
+  const explicitFrom = stringFlag(args, 'from')
+
+  let source: ResolvedSource | null = null
+  try {
+    source = resolveSource(explicitFrom)
+  } catch {
+    source = null
+  }
+
+  // A checkout or explicit --from is already local truth; only the git cache
+  // (or nothing usable) warrants a network round-trip.
+  if (
+    explicitFrom === undefined &&
+    (source === null || source.kind === 'cache' || source.kind === 'bundled')
+  ) {
+    try {
+      const result = syncCache({
+        repo: stringFlag(args, 'repo'),
+        ref: stringFlag(args, 'ref'),
+        log: (message) => console.log(dim(message)),
+      })
+      console.log(dim(`catalog at ${result.commit}`))
+      source = { dir: result.dir, kind: 'cache' }
+    } catch (error) {
+      if (source === null) throw error
+      const reason = error instanceof Error ? error.message : String(error)
+      console.log(
+        dim(
+          `could not refresh the catalog (${reason.split('\n')[0]}); updating from the last pull`,
+        ),
+      )
+    }
+  }
+  if (source === null)
+    throw new Error(
+      'No catalog available. Run `tofui-skills pull` to fetch it.',
+    )
+
+  const catalog = loadCatalog(source.dir)
+  console.log(dim(`catalog: ${source.dir} (${source.kind})`))
+
+  const named: CatalogEntry[] | null = args.positionals.length
+    ? (() => {
+        const { chosen, missing } = selectEntries(catalog, args.positionals)
+        if (missing.length)
+          throw new Error(`Not found in the catalog: ${missing.join(', ')}`)
+        return chosen
+      })()
+    : null
+
+  const byKey = new Map<string, CatalogEntry>(
+    [...catalog.skills, ...catalog.rules].map((e) => [manifestKey(e), e]),
+  )
+  const cache = source.kind === 'cache' ? describeCache() : null
+
+  let updated = 0
+  let current = 0
+
+  for (const agent of agentsFrom(args)) {
+    const root = rootFor(args, agent)
+    const manifest = readManifest(root)
+    console.log(`\n${bold(agent.label)} ${dim(root)}`)
+
+    const keys = named ? named.map(manifestKey) : Object.keys(manifest.entries)
+    if (keys.length === 0) {
+      console.log(dim('  nothing installed here'))
+      continue
+    }
+
+    for (const key of keys) {
+      const record = manifest.entries[key]
+      const entry = byKey.get(key)
+      if (record === undefined) {
+        console.log(
+          `  absent  ${entry?.type} ${entry?.id} ${dim('(not installed here)')}`,
+        )
+        continue
+      }
+      if (entry === undefined) {
+        console.log(
+          `  gone    ${record.type} ${record.id} ${dim('(no longer in the catalog; `remove` drops it)')}`,
+        )
+        continue
+      }
+      // AGENTS.md rules share one file; the block sync below refreshes them.
+      if (!isFileDelivered(entry, agent)) continue
+      if (isCurrent(entry, agent, root, record.mode)) {
+        console.log(
+          `  current ${entry.type} ${entry.id}${record.mode === 'link' ? dim(' (linked)') : ''}`,
+        )
+        current += 1
+        continue
+      }
+      install(entry, agent, root, manifest, {
+        mode: record.mode,
+        origin: cache?.url ?? undefined,
+        commit: cache?.commit ?? undefined,
+      })
+      console.log(`  update  ${entry.type} ${entry.id}`)
+      updated += 1
+    }
+
+    writeManifest(root, manifest)
+    if (agent.ruleDelivery === 'agents-md') {
+      const tracked = trackedRules(manifest, catalog.rules)
+      if (tracked.length > 0) {
+        const changed = syncAgentsFile(agentsFileFor(root), tracked)
+        console.log(dim(`  AGENTS.md ${changed ? 'refreshed' : 'current'}`))
+        if (changed) updated += 1
+        else current += 1
+      }
+    }
+  }
+
+  console.log(`\n${updated} updated, ${current} current.`)
+}
+
 function commandRemove(args: Args): void {
   const { catalog } = openCatalog(args)
   const agents = agentsFrom(args)
@@ -321,8 +448,11 @@ ${bold('Usage')}
 ${bold('Commands')}
   list                     Show every skill and rule in the catalog
   add <name...> | --all    Install skills and rules for the chosen agents
+  update [name...]         Refresh installed entries against the catalog,
+                           pulling first; adds nothing new, keeps each
+                           entry's copy/link mode, skips what is current
   remove <name...>         Remove previously installed entries
-  sync                     Clone or fast-forward the catalog from the remote
+  sync | pull              Clone or fast-forward the catalog from the remote
   status                   Show remote, cache, active catalog and installs
 
 ${bold('Options')}
@@ -376,8 +506,12 @@ function main(): void {
       commandRemove(args)
       break
     case 'sync':
-    case 'update':
+    case 'pull':
       commandSync(args)
+      break
+    case 'update':
+    case 'upgrade':
+      commandUpdate(args)
       break
     case 'status':
       commandStatus(args)

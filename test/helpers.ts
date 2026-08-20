@@ -65,6 +65,23 @@ export function makeCatalog(): string {
   return root
 }
 
+let symlinkCapable: boolean | undefined
+
+/** Windows only permits symlinks with Developer Mode or elevation. */
+export function canSymlink(): boolean {
+  if (symlinkCapable !== undefined) return symlinkCapable
+  const dir = makeTempDir('symlink-probe')
+  try {
+    fs.symlinkSync(dir, path.join(dir, 'probe'), 'dir')
+    symlinkCapable = true
+  } catch {
+    symlinkCapable = false
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+  return symlinkCapable
+}
+
 export function removeAll(...dirs: readonly string[]): void {
   for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true })
 }

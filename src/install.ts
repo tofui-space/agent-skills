@@ -141,6 +141,56 @@ export function inspect(
   return { dest, exists, tracked: manifest.entries[key] !== undefined, key }
 }
 
+/** True when the installed copy matches the catalog byte-for-byte. */
+export function contentEquals(from: string, to: string): boolean {
+  const source = fs.statSync(from, { throwIfNoEntry: false })
+  const installed = fs.lstatSync(to, { throwIfNoEntry: false })
+  if (source === undefined || installed === undefined) return false
+  if (source.isDirectory()) {
+    if (!installed.isDirectory()) return false
+    const sourceNames = fs.readdirSync(from).sort()
+    const installedNames = fs.readdirSync(to).sort()
+    return (
+      sourceNames.length === installedNames.length &&
+      sourceNames.every(
+        (name, index) =>
+          name === installedNames[index] &&
+          contentEquals(path.join(from, name), path.join(to, name)),
+      )
+    )
+  }
+  if (!installed.isFile()) return false
+  if (source.size !== installed.size) return false
+  return fs.readFileSync(from).equals(fs.readFileSync(to))
+}
+
+/**
+ * True when the installed entry already reflects the catalog: a copy that
+ * matches byte-for-byte, or a link that resolves into the catalog source.
+ * Only meaningful for file-delivered entries; AGENTS.md rules are compared
+ * at the file level by syncAgentsFile.
+ */
+export function isCurrent(
+  entry: CatalogEntry,
+  agent: AgentDefinition,
+  root: string,
+  mode: InstallMode,
+): boolean {
+  const from = entry.type === 'skill' ? entry.dir : entry.file
+  const dest = destinationFor(entry, agent, root)
+  if (mode === 'link') {
+    try {
+      return (
+        fs.lstatSync(dest).isSymbolicLink() &&
+        fs.realpathSync(dest) === fs.realpathSync(from)
+      )
+    } catch {
+      return false
+    }
+  }
+  return contentEquals(from, dest)
+}
+
 export interface InstallOptions {
   readonly mode: InstallMode
   readonly origin?: string | undefined
@@ -233,12 +283,13 @@ export function renderRulesBlock(rules: readonly RuleEntry[]): string {
 
 /**
  * Replaces the managed block in place, leaving any hand-written AGENTS.md
- * content untouched. Passing no rules removes the block entirely.
+ * content untouched. Passing no rules removes the block entirely. Returns
+ * true when the file actually changed.
  */
 export function syncAgentsFile(
   file: string,
   rules: readonly RuleEntry[],
-): void {
+): boolean {
   const existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
   const block = rules.length > 0 ? renderRulesBlock(rules) : ''
 
@@ -259,12 +310,16 @@ export function syncAgentsFile(
   }
 
   if (next.length === 0) {
+    const existed = fs.existsSync(file)
     fs.rmSync(file, { force: true })
-    return
+    return existed
   }
 
+  const output = `${next}\n`
+  if (output === existing) return false
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, `${next}\n`)
+  fs.writeFileSync(file, output)
+  return true
 }
 
 /** Rules the manifest still claims, in catalog order, for re-rendering. */

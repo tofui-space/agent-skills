@@ -9,13 +9,21 @@ import {
   destinationFor,
   inspect,
   install,
+  isCurrent,
   readManifest,
+  syncAgentsFile,
   targetRoot,
   uninstall,
   writeManifest,
 } from '../src/install.ts'
 import type { Catalog, CatalogEntry, Manifest } from '../src/types.ts'
-import { makeCatalog, makeTempDir, removeAll, writeFile } from './helpers.ts'
+import {
+  canSymlink,
+  makeCatalog,
+  makeTempDir,
+  removeAll,
+  writeFile,
+} from './helpers.ts'
 
 const claude = AGENTS.claude
 
@@ -199,7 +207,8 @@ describe('install and uninstall', () => {
     removeAll(target)
   })
 
-  test('link mode creates a symlink back to the catalog', () => {
+  test('link mode creates a symlink back to the catalog', (t) => {
+    if (!canSymlink()) return t.skip('symlinks unavailable on this system')
     const dest = install(
       entry(catalog, 'flat-skill'),
       claude,
@@ -276,6 +285,58 @@ describe('install and uninstall', () => {
     uninstall(skill, claude, target, manifest)
     assert.equal(fs.existsSync(dest), false)
     assert.equal(manifest.entries['skill:flat-skill'], undefined)
+    removeAll(target)
+  })
+
+  test('a fresh copy is current', () => {
+    const skill = entry(catalog, 'flat-skill')
+    install(skill, claude, target, manifest, { mode: 'copy' })
+    assert.equal(isCurrent(skill, claude, target, 'copy'), true)
+    removeAll(target)
+  })
+
+  test('an edited install is not current', () => {
+    const skill = entry(catalog, 'flat-skill')
+    const dest = install(skill, claude, target, manifest, { mode: 'copy' })
+    assert.ok(dest)
+    fs.appendFileSync(path.join(dest, 'SKILL.md'), 'local edit\n')
+    assert.equal(isCurrent(skill, claude, target, 'copy'), false)
+    removeAll(target)
+  })
+
+  test('an extra installed file is not current', () => {
+    const skill = entry(catalog, 'flat-skill')
+    const dest = install(skill, claude, target, manifest, { mode: 'copy' })
+    assert.ok(dest)
+    writeFile(path.join(dest, 'stray.md'), 'stray\n')
+    assert.equal(isCurrent(skill, claude, target, 'copy'), false)
+    removeAll(target)
+  })
+
+  test('a deleted install is not current', () => {
+    const skill = entry(catalog, 'flat-skill')
+    assert.equal(isCurrent(skill, claude, target, 'copy'), false)
+    removeAll(target)
+  })
+
+  test('a link into the catalog is current; a copy is not a link', (t) => {
+    if (!canSymlink()) return t.skip('symlinks unavailable on this system')
+    const skill = entry(catalog, 'flat-skill')
+    install(skill, claude, target, manifest, { mode: 'link' })
+    assert.equal(isCurrent(skill, claude, target, 'link'), true)
+    install(skill, claude, target, manifest, { mode: 'copy' })
+    assert.equal(isCurrent(skill, claude, target, 'link'), false)
+    removeAll(target)
+  })
+
+  test('syncAgentsFile reports change on write, none when repeated', () => {
+    const rule = catalog.rules.find((r) => r.id === 'top')
+    assert.ok(rule)
+    const file = path.join(target, 'AGENTS.md')
+    assert.equal(syncAgentsFile(file, [rule]), true)
+    assert.equal(syncAgentsFile(file, [rule]), false)
+    assert.equal(syncAgentsFile(file, []), true)
+    assert.equal(syncAgentsFile(file, []), false)
     removeAll(target)
   })
 

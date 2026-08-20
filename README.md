@@ -16,7 +16,8 @@ tofui-skills sync
 tofui-skills list
 ```
 
-`sync` pulls the latest catalog from GitHub. Reinstalling the CLI is only needed when the CLI itself changes.
+`sync` (alias `pull`) fetches the latest catalog from GitHub. Reinstalling the CLI is only needed when the CLI
+itself changes.
 
 ### Install
 
@@ -53,6 +54,24 @@ Claude Code loads both directories automatically, and `paths:` frontmatter scope
 Codex has no equivalent — its own `rules/` directory holds a sandbox approval DSL, not instructions — so rules are
 inlined into an `AGENTS.md` block instead. Content outside the block is left alone. A rule's `paths:` globs are
 written into that block as a sentence rather than enforced, because Codex cannot scope instructions by glob.
+
+### Keeping up to date
+
+`update` refreshes what is already installed and nothing else — unlike `add --all`, it never brings in catalog
+entries you don't have.
+
+```sh
+tofui-skills update                              # ./.claude — refresh everything installed here
+tofui-skills update --global                     # the global config
+tofui-skills update --agent all --global         # both agents' global configs
+tofui-skills update concise-docs                 # just the named entries
+```
+
+It pulls the catalog first when the cache is the active source (a checkout or `--from` is used as-is, and being
+offline falls back to the last pull), keeps each entry's original copy/link mode, and skips entries whose installed
+files already match the catalog byte-for-byte — no version numbers involved. Local edits to a tracked entry count
+as stale and are overwritten; entries the CLI didn't install are never touched. Linked installs are already live,
+so for them `update` (or `sync` alone) is a no-op.
 
 ### Disabling and removal
 
