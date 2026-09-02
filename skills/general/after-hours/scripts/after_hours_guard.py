@@ -19,7 +19,7 @@ Lifecycle
 
 Design choices
 --------------
-- Default-deny. An unrecognised tool name is denied, so new/unexpected tools can
+- Default-deny. An unrecognized tool name is denied, so new/unexpected tools can
   never fire while unattended.
 - Fail-closed. If the guard errors *while armed*, it denies. If it errors while
   disarmed, it allows, so a bug here can never brick ordinary sessions.
@@ -288,7 +288,7 @@ def main():
             _log(project_dir, tool_name, decision, reason, str(tool_input.get("file_path") or tool_input.get("path") or ""))
             _emit(decision, reason)
 
-        # Default-deny: unrecognised tool (includes all MCP/browser tools).
+        # Default-deny: unrecognized tool (includes all MCP/browser tools).
         _log(project_dir, tool_name, "deny", "tool not in the after-hours allowlist (default-deny)")
         _emit("deny", "'{}' is not permitted during unattended after-hours runs (default-deny)".format(tool_name or "unknown tool"))
 

@@ -7,7 +7,7 @@ model to the user.
 ## Why enforcement is a hook, not a rule
 
 During the day the user's **interrupt key** is the real safety mechanism: a wrong move
-is visible and cancelled within a couple of seconds. Unattended, that same wrong move
+is visible and canceled within a couple of seconds. Unattended, that same wrong move
 runs for *minutes* before anyone sees it — the hazard is identical in kind but far
 larger in exposure. Prose instructions in a skill can be rationalised away by a model
 that has been confused or prompt-injected. So the envelope is enforced by a Claude Code
@@ -47,7 +47,7 @@ quietly widen its own latitude after the user has gone.
 }
 ```
 
-- **Paths** are absolute and normalised (the `arm` helper resolves them). A Read is
+- **Paths** are absolute and normalized (the `arm` helper resolves them). A Read is
   allowed inside read-or-write roots; a Write/Edit only inside write roots. Everything
   else is denied — this is what keeps the run from wandering into folders today never
   touched, and it shrinks the injection surface to files you chose.
