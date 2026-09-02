@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { AGENT_IDS, parseAgents } from './agents.ts'
 import { loadCatalog, selectEntries } from './catalog.ts'
@@ -17,8 +18,11 @@ import {
   writeManifest,
 } from './install.ts'
 import {
+  cacheHeadCommit,
   DEFAULT_REPO,
   describeCache,
+  describeInstall,
+  PACKAGE_NAME,
   repoUrl,
   resolveSource,
   syncCache,
@@ -107,7 +111,7 @@ function count(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`
 }
 
-function summarise(text: string, width = 88): string {
+function summarize(text: string, width = 88): string {
   const flat = text.replace(/\s+/g, ' ').trim()
   return flat.length > width ? `${flat.slice(0, width - 1)}…` : flat
 }
@@ -139,12 +143,12 @@ function rootFor(args: Args, agent: AgentDefinition): string {
 function describeEntry(entry: CatalogEntry): string {
   if (entry.type === 'skill') {
     const group = entry.category ? dim(` (${entry.category})`) : ''
-    return `  ${entry.id}${group}\n      ${dim(summarise(entry.description))}`
+    return `  ${entry.id}${group}\n      ${dim(summarize(entry.description))}`
   }
   const scope = entry.paths.length
     ? `scoped to ${entry.paths.join(', ')}`
     : 'always on'
-  return `  ${entry.id}\n      ${dim(summarise(scope))}`
+  return `  ${entry.id}\n      ${dim(summarize(scope))}`
 }
 
 function commandList(args: Args): void {
@@ -235,10 +239,73 @@ function commandAdd(args: Args): void {
 }
 
 /**
- * Refreshes what the manifest already tracks, and nothing else: entries the
- * CLI never installed are not selected, so no --force interplay exists here.
- * Pulls the catalog first when the cache is the active source, making
- * `tofui-skills update` a complete routine on its own.
+ * Reinstalls the global package from the remote.
+ * The already-running process keeps executing the old code — pnpm builds into a fresh store directory — so callers wanting the new behavior must re-exec.
+ */
+function commandSelfUpdate(args: Args): void {
+  const manager = describeInstall()?.manager ?? 'pnpm'
+  const url = repoUrl(stringFlag(args, 'repo'))
+  const spec = url.startsWith('git+') ? url : `git+${url}`
+  const commandArgs =
+    manager === 'pnpm'
+      ? ['add', '-g', `--allow-build=${PACKAGE_NAME}`, spec]
+      : ['install', '-g', spec]
+
+  console.log(dim(`${manager} ${commandArgs.join(' ')}`))
+  const result = spawnSync(manager, commandArgs, {
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  })
+  if (result.status !== 0)
+    throw new Error(
+      `${manager} exited with ${result.status ?? 'a signal'}; the CLI was not updated.`,
+    )
+}
+
+/**
+ * A pull can bring newer CLI code than the running install, which sync alone can never apply to itself.
+ * When the cache HEAD and the install's own commit disagree, reinstall and re-run this invocation once on the new version.
+ * Returns true when it re-executed and this process should stop;
+ * returns false when nothing was stale, or when the reinstall failed and the caller should fall back to updating the catalog with the current version.
+ */
+function selfUpdateIfStale(args: Args): boolean {
+  if (process.env.TOFUI_SKILLS_SELF_UPDATED !== undefined) return false
+  if (boolFlag(args, 'no-self')) return false
+
+  const install = describeInstall()
+  const head = cacheHeadCommit()
+  // A dev checkout or an npm layout hides the commit; unknown means no-op.
+  if (install?.commit == null || head === null) return false
+  if (head.startsWith(install.commit) || install.commit.startsWith(head))
+    return false
+
+  console.log(
+    `CLI is stale (${install.commit.slice(0, 7)} installed, ${head.slice(0, 7)} pulled); reinstalling…`,
+  )
+  try {
+    commandSelfUpdate(args)
+  } catch (error) {
+    // A failed reinstall must not block the update the old CLI can still do.
+    const reason = error instanceof Error ? error.message : String(error)
+    console.log(
+      dim(
+        `self-update failed (${reason.split('\n')[0]}); continuing with the current version`,
+      ),
+    )
+    return false
+  }
+  const rerun = spawnSync('tofui-skills', process.argv.slice(2), {
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+    env: { ...process.env, TOFUI_SKILLS_SELF_UPDATED: '1' },
+  })
+  process.exitCode = rerun.status ?? 0
+  return true
+}
+
+/**
+ * Refreshes what the manifest already tracks, and nothing else: entries the CLI never installed are not selected, so no --force interplay exists here.
+ * Pulls the catalog first when the cache is the active source, making `tofui-skills update` a complete routine on its own.
  */
 function commandUpdate(args: Args): void {
   const explicitFrom = stringFlag(args, 'from')
@@ -250,8 +317,8 @@ function commandUpdate(args: Args): void {
     source = null
   }
 
-  // A checkout or explicit --from is already local truth; only the git cache
-  // (or nothing usable) warrants a network round-trip.
+  // A checkout or explicit --from is already local truth;
+  // only the git cache (or nothing usable) warrants a network round-trip.
   if (
     explicitFrom === undefined &&
     (source === null || source.kind === 'cache' || source.kind === 'bundled')
@@ -264,6 +331,7 @@ function commandUpdate(args: Args): void {
       })
       console.log(dim(`catalog at ${result.commit}`))
       source = { dir: result.dir, kind: 'cache' }
+      if (selfUpdateIfStale(args)) return
     } catch (error) {
       if (source === null) throw error
       const reason = error instanceof Error ? error.message : String(error)
@@ -450,7 +518,9 @@ ${bold('Commands')}
   add <name...> | --all    Install skills and rules for the chosen agents
   update [name...]         Refresh installed entries against the catalog,
                            pulling first; adds nothing new, keeps each
-                           entry's copy/link mode, skips what is current
+                           entry's copy/link mode, skips what is current.
+                           Reinstalls a stale CLI too (opt out: --no-self)
+  self-update              Reinstall the global CLI from the remote
   remove <name...>         Remove previously installed entries
   sync | pull              Clone or fast-forward the catalog from the remote
   status                   Show remote, cache, active catalog and installs
@@ -512,6 +582,9 @@ function main(): void {
     case 'update':
     case 'upgrade':
       commandUpdate(args)
+      break
+    case 'self-update':
+      commandSelfUpdate(args)
       break
     case 'status':
       commandStatus(args)

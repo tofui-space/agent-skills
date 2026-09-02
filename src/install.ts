@@ -21,9 +21,8 @@ export interface TargetOptions {
 }
 
 /**
- * Resolves the config directory an agent actually reads. A global install
- * follows the agent's own home variable (CLAUDE_CONFIG_DIR, CODEX_HOME) when
- * set, because relocating that directory is how both agents are configured.
+ * Resolves the config directory an agent actually reads.
+ * A global install follows the agent's own home variable (CLAUDE_CONFIG_DIR, CODEX_HOME) when set, because relocating that directory is how both agents are configured.
  */
 export function targetRoot(
   agent: AgentDefinition,
@@ -60,8 +59,8 @@ export function destinationFor(
 }
 
 /**
- * AGENTS.md sits beside the config directory, since Codex scopes it to the
- * directory tree containing it rather than to its own config folder.
+ * AGENTS.md sits beside the config directory,
+ * since Codex scopes it to the directory tree containing it rather than to its own config folder.
  */
 export function agentsFileFor(root: string): string {
   return path.join(path.dirname(root), 'AGENTS.md')
@@ -133,8 +132,9 @@ export function inspect(
 ): Placement {
   const dest = destinationFor(entry, agent, root)
   const key = manifestKey(entry)
-  // A rule folded into AGENTS.md shares one file with every other rule, so
-  // the file existing says nothing about this entry. The manifest decides.
+  // A rule folded into AGENTS.md shares one file with every other rule,
+  // so the file existing says nothing about this entry.
+  // The manifest decides.
   const exists = isFileDelivered(entry, agent)
     ? fs.lstatSync(dest, { throwIfNoEntry: false }) !== undefined
     : manifest.entries[key] !== undefined
@@ -165,10 +165,8 @@ export function contentEquals(from: string, to: string): boolean {
 }
 
 /**
- * True when the installed entry already reflects the catalog: a copy that
- * matches byte-for-byte, or a link that resolves into the catalog source.
- * Only meaningful for file-delivered entries; AGENTS.md rules are compared
- * at the file level by syncAgentsFile.
+ * True when the installed entry already reflects the catalog: a copy that matches byte-for-byte, or a link that resolves into the catalog source.
+ * Only meaningful for file-delivered entries; AGENTS.md rules are compared at the file level by syncAgentsFile.
  */
 export function isCurrent(
   entry: CatalogEntry,
@@ -198,9 +196,8 @@ export interface InstallOptions {
 }
 
 /**
- * Returns the path written, or null when the entry only became a manifest
- * record because it is delivered through AGENTS.md. Callers must then call
- * syncAgentsFile to materialise it.
+ * Returns the path written, or null when the entry only became a manifest record because it is delivered through AGENTS.md.
+ * Callers must then call syncAgentsFile to materialize it.
  */
 export function install(
   entry: CatalogEntry,
@@ -259,9 +256,8 @@ function stripFrontmatter(text: string): string {
 }
 
 /**
- * Inlines rule bodies, because AGENTS.md has no include mechanism. A rule's
- * `paths:` globs survive as a prose line: Codex cannot enforce glob scoping,
- * so the scope has to be stated where the model will read it.
+ * Inlines rule bodies, because AGENTS.md has no include mechanism.
+ * A rule's `paths:` globs survive as a prose line: Codex cannot enforce glob scoping, so the scope has to be stated where the model will read it.
  */
 export function renderRulesBlock(rules: readonly RuleEntry[]): string {
   const sections = rules.map((rule) => {
@@ -282,9 +278,9 @@ export function renderRulesBlock(rules: readonly RuleEntry[]): string {
 }
 
 /**
- * Replaces the managed block in place, leaving any hand-written AGENTS.md
- * content untouched. Passing no rules removes the block entirely. Returns
- * true when the file actually changed.
+ * Replaces the managed block in place, leaving any hand-written AGENTS.md content untouched.
+ * Passing no rules removes the block entirely.
+ * Returns true when the file actually changed.
  */
 export function syncAgentsFile(
   file: string,

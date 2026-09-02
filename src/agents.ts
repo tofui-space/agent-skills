@@ -3,7 +3,7 @@ import type { AgentDefinition, AgentId } from './types.ts'
 /**
  * Skills are portable: both agents read `<config>/skills/<name>/SKILL.md`.
  * Prose rules are not. Claude Code loads `<config>/rules/**.md` directly and
- * honours `paths:` frontmatter. Codex has no equivalent — its `rules/`
+ * honors `paths:` frontmatter. Codex has no equivalent — its `rules/`
  * directory holds a sandbox approval DSL (`prefix_rule(...)`), not
  * instructions — so rules reach Codex through an AGENTS.md block instead.
  */
@@ -32,7 +32,7 @@ export function isAgentId(value: string): value is AgentId {
 
 /**
  * Parses `--agent` values: a comma-separated list, or `all`.
- * Defaults to Claude Code so existing invocations keep their behaviour.
+ * Defaults to Claude Code so existing invocations keep their behavior.
  */
 export function parseAgents(value: string | undefined): AgentDefinition[] {
   if (value === undefined) return [AGENTS.claude]

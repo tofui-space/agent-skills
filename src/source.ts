@@ -32,9 +32,8 @@ function isCatalog(dir: string): boolean {
 }
 
 /**
- * A checkout of this repository is identified by its package name, so an
- * unrelated project that happens to contain a `skills/` directory is never
- * mistaken for the catalog.
+ * A checkout of this repository is identified by its package name,
+ * so an unrelated project that happens to contain a `skills/` directory is never mistaken for the catalog.
  */
 function findCheckoutFrom(startDir: string): string | null {
   let dir = path.resolve(startDir)
@@ -141,10 +140,95 @@ export function describeCache(): CacheInfo | null {
   }
 }
 
+/** Full commit the cache is checked out at, when a cache exists. */
+export function cacheHeadCommit(): string | null {
+  const dir = cacheRepoDir()
+  if (!fs.existsSync(path.join(dir, '.git'))) return null
+  try {
+    return git(['rev-parse', 'HEAD'], dir)
+  } catch {
+    return null
+  }
+}
+
 /**
- * Picks the catalog to install from, most explicit source first. A local
- * checkout wins over the cache so that editing the repo and running the CLI
- * inside it exercises the working tree rather than the last sync.
+ * Some pnpm layouts embed the resolved commit in the store path itself (…tar.gz+<sha>…).
+ * Fragile by nature, so callers must treat null as "unknown", never as "current".
+ */
+export function commitFromInstallPath(realPath: string): string | null {
+  const match = /tar\.gz[+/\\]([0-9a-f]{7,40})/.exec(realPath)
+  return match?.[1] ?? null
+}
+
+/**
+ * Reads the commit a global install was resolved from out of the package manager's lockfile, walking up from the invoked script.
+ * pnpm records the codeload tarball URL; npm records a #<sha> fragment on the git URL.
+ * Matches on the repo basename because npm's resolved URL omits the scope.
+ * A dev checkout's own lockfile has neither, so it yields null there.
+ */
+export function commitFromLockfiles(
+  startDir: string,
+  packageName: string,
+): string | null {
+  const basename = packageName.split('/').pop() ?? packageName
+  const escaped = basename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(
+    `${escaped}[^\\n]*?(?:tar\\.gz[+/]|#)([0-9a-f]{7,40})`,
+  )
+  let dir = path.resolve(startDir)
+  for (;;) {
+    for (const name of [
+      'pnpm-lock.yaml',
+      '.package-lock.json',
+      'package-lock.json',
+    ]) {
+      const file = path.join(dir, name)
+      if (fs.existsSync(file)) {
+        const match = pattern.exec(fs.readFileSync(file, 'utf8'))
+        if (match?.[1] !== undefined) return match[1]
+      }
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+}
+
+export interface InstallInfo {
+  readonly realPath: string
+  /** Commit this install was built from, when a lockfile or path reveals it. */
+  readonly commit: string | null
+  readonly manager: 'pnpm' | 'npm'
+}
+
+/** Describes the package the running CLI was loaded from. */
+export function describeInstall(): InstallInfo | null {
+  const script = process.argv[1]
+  if (script === undefined) return null
+  try {
+    // argv[1] keeps the symlinked project path the bin shim invoked,
+    // which sits under the package manager's global project dir;
+    // import.meta.url would already be resolved into the content-addressed store.
+    const invokedDir = path.dirname(path.resolve(script))
+    const realPath = fs.realpathSync(packageRoot)
+    return {
+      realPath,
+      commit:
+        commitFromLockfiles(invokedDir, PACKAGE_NAME) ??
+        commitFromInstallPath(realPath),
+      manager:
+        /[\\/]pnpm[\\/]/.test(invokedDir) || /[\\/]pnpm[\\/]/.test(realPath)
+          ? 'pnpm'
+          : 'npm',
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Picks the catalog to install from, most explicit source first.
+ * A local checkout wins over the cache, so that editing the repo and running the CLI inside it exercises the working tree rather than the last sync.
  */
 export function resolveSource(
   explicitFrom?: string | undefined,
