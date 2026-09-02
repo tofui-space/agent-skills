@@ -7,6 +7,8 @@ import {
   PACKAGE_NAME,
   cacheDir,
   cacheRepoDir,
+  commitFromInstallPath,
+  commitFromLockfiles,
   hasGit,
   repoUrl,
   resolveSource,
@@ -61,7 +63,7 @@ describe('repoUrl', () => {
 describe('cacheDir', () => {
   afterEach(clearEnv)
 
-  test('honours TOFUI_SKILLS_HOME', () => {
+  test('honors TOFUI_SKILLS_HOME', () => {
     process.env.TOFUI_SKILLS_HOME = '/tmp/tofui-skills-cache-test'
     assert.equal(cacheDir(), path.resolve('/tmp/tofui-skills-cache-test'))
     assert.equal(
@@ -159,5 +161,66 @@ describe('resolveSource', () => {
 describe('hasGit', () => {
   test('detects the git binary on PATH', () => {
     assert.equal(typeof hasGit(), 'boolean')
+  })
+})
+
+describe('commitFromInstallPath', () => {
+  const sha = '1429c05d20abee055a1e294359555b687398a1d3'
+
+  test('reads the commit from a pnpm store path', () => {
+    const realPath = `C:\\Users\\u\\AppData\\Local\\pnpm\\global\\v11\\.pnpm\\@tofui-space+agent-skills@https+++codeload.github.com+tofui-space+agent-skills+tar.gz+${sha}\\node_modules\\@tofui-space\\agent-skills`
+    assert.equal(commitFromInstallPath(realPath), sha)
+  })
+
+  test('reads the commit from a slash-separated path', () => {
+    assert.equal(
+      commitFromInstallPath(`/home/u/.pnpm/pkg@tar.gz/${sha}/node_modules/x`),
+      sha,
+    )
+  })
+
+  test('returns null for a dev checkout path', () => {
+    assert.equal(
+      commitFromInstallPath('D:\\_dev\\IdeaProjects\\agent-skills'),
+      null,
+    )
+  })
+})
+
+describe('commitFromLockfiles', () => {
+  const sha = '1429c05d20abee055a1e294359555b687398a1d3'
+  let root: string
+
+  afterEach(() => {
+    removeAll(root)
+  })
+
+  test('reads a pnpm codeload resolution, walking up from a nested dir', () => {
+    root = makeTempDir('lock-pnpm')
+    writeFile(
+      path.join(root, 'pnpm-lock.yaml'),
+      `importers:\n  .:\n    dependencies:\n      '${PACKAGE_NAME}':\n        specifier: github:tofui-space/agent-skills\n        version: https://codeload.github.com/tofui-space/agent-skills/tar.gz/${sha}\n`,
+    )
+    const nested = path.join(root, 'node_modules', PACKAGE_NAME, 'dist')
+    fs.mkdirSync(nested, { recursive: true })
+    assert.equal(commitFromLockfiles(nested, PACKAGE_NAME), sha)
+  })
+
+  test('reads an npm resolved fragment', () => {
+    root = makeTempDir('lock-npm')
+    writeFile(
+      path.join(root, '.package-lock.json'),
+      `{"packages":{"node_modules/${PACKAGE_NAME}":{"resolved":"git+ssh://git@github.com/tofui-space/agent-skills.git#${sha}"}}}`,
+    )
+    assert.equal(commitFromLockfiles(root, PACKAGE_NAME), sha)
+  })
+
+  test("a dev checkout's own lockfile yields null", () => {
+    root = makeTempDir('lock-dev')
+    writeFile(
+      path.join(root, 'pnpm-lock.yaml'),
+      'importers:\n  .:\n    devDependencies:\n      typescript:\n        specifier: ^7.0.2\n        version: 7.0.2\n',
+    )
+    assert.equal(commitFromLockfiles(root, PACKAGE_NAME), null)
   })
 })
