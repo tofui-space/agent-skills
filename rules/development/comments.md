@@ -41,6 +41,8 @@ Do not add comments that:
 
 Comments must be understandable from the repository and any references they cite.
 
+A comment documenting a module, function, method, or class is the abstract interface to the implementation and should not restate the implementation details; only provide the user with the necessary information on how to use it.
+
 Do not refer to:
 
 * prompts, conversations, users, agents, or models
