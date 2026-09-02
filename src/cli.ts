@@ -306,9 +306,11 @@ function selfUpdateIfStale(args: Args): boolean {
 /**
  * Refreshes what the manifest already tracks, and nothing else: entries the CLI never installed are not selected, so no --force interplay exists here.
  * Pulls the catalog first when the cache is the active source, making `tofui-skills update` a complete routine on its own.
+ * With --dry-run it still pulls, so the preview reflects the remote, but reports what would change without writing anything and exits non-zero when any entry is stale.
  */
 function commandUpdate(args: Args): void {
   const explicitFrom = stringFlag(args, 'from')
+  const dryRun = boolFlag(args, 'dry-run', 'check', 'n')
 
   let source: ResolvedSource | null = null
   try {
@@ -331,7 +333,7 @@ function commandUpdate(args: Args): void {
       })
       console.log(dim(`catalog at ${result.commit}`))
       source = { dir: result.dir, kind: 'cache' }
-      if (selfUpdateIfStale(args)) return
+      if (!dryRun && selfUpdateIfStale(args)) return
     } catch (error) {
       if (source === null) throw error
       const reason = error instanceof Error ? error.message : String(error)
@@ -402,28 +404,40 @@ function commandUpdate(args: Args): void {
         current += 1
         continue
       }
-      install(entry, agent, root, manifest, {
-        mode: record.mode,
-        origin: cache?.url ?? undefined,
-        commit: cache?.commit ?? undefined,
-      })
-      console.log(`  update  ${entry.type} ${entry.id}`)
+      if (!dryRun)
+        install(entry, agent, root, manifest, {
+          mode: record.mode,
+          origin: cache?.url ?? undefined,
+          commit: cache?.commit ?? undefined,
+        })
+      console.log(
+        `  ${dryRun ? 'stale  ' : 'update '} ${entry.type} ${entry.id}`,
+      )
       updated += 1
     }
 
-    writeManifest(root, manifest)
+    if (!dryRun) writeManifest(root, manifest)
     if (agent.ruleDelivery === 'agents-md') {
       const tracked = trackedRules(manifest, catalog.rules)
       if (tracked.length > 0) {
-        const changed = syncAgentsFile(agentsFileFor(root), tracked)
-        console.log(dim(`  AGENTS.md ${changed ? 'refreshed' : 'current'}`))
-        if (changed) updated += 1
-        else current += 1
+        if (dryRun) {
+          console.log(dim('  AGENTS.md refresh not previewed in --dry-run'))
+        } else {
+          const changed = syncAgentsFile(agentsFileFor(root), tracked)
+          console.log(dim(`  AGENTS.md ${changed ? 'refreshed' : 'current'}`))
+          if (changed) updated += 1
+          else current += 1
+        }
       }
     }
   }
 
-  console.log(`\n${updated} updated, ${current} current.`)
+  console.log(
+    dryRun
+      ? `\n${updated} would update, ${current} current.`
+      : `\n${updated} updated, ${current} current.`,
+  )
+  if (dryRun && updated > 0) process.exitCode = 1
 }
 
 function commandRemove(args: Args): void {
@@ -519,7 +533,8 @@ ${bold('Commands')}
   update [name...]         Refresh installed entries against the catalog,
                            pulling first; adds nothing new, keeps each
                            entry's copy/link mode, skips what is current.
-                           Reinstalls a stale CLI too (opt out: --no-self)
+                           Reinstalls a stale CLI too (opt out: --no-self).
+                           Add --dry-run to preview the status, changing nothing
   self-update              Reinstall the global CLI from the remote
   remove <name...>         Remove previously installed entries
   sync | pull              Clone or fast-forward the catalog from the remote
@@ -531,6 +546,7 @@ ${bold('Options')}
       --dir <path>         Target <path>/<agent config dir>
       --link               Symlink to the catalog instead of copying
   -f, --force              Replace files this CLI did not install
+      --dry-run            (update) Report what would change; write nothing
       --from <path>        Use a catalog directory instead of the cache
       --repo <url>         Override the remote (default ${DEFAULT_REPO})
       --ref <ref>          Sync a branch or tag instead of the default head
