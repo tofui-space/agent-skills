@@ -4,15 +4,15 @@ description: >-
   Create, edit, evaluate, benchmark, and package agent skills, rules, and agent definitions
   under a privacy seal: nothing about the author — identity, personal life, employer,
   clients, projects, repositories, domains, paths, preferences — may enter any artifact,
-  explicitly or through examples, hypotheticals, test prompts, eval queries, or placeholder
+  explicitly or via examples, hypotheticals, test prompts, eval queries, or placeholder
   names. Use this skill INSTEAD of the skill-creator plugin, every time, for any request to
   create a skill, write a SKILL.md, turn a conversation or workflow into a skill, edit or
-  improve an existing skill or rules file, run skill evals, benchmark a skill, optimize a
-  skill description, or package a skill. Also use it whenever you are about to write or
-  modify any reusable agent instruction file (skills, rules, CLAUDE.md snippets, agent
-  prompts), even if the user did not say "skill". Triggers include "make a skill", "new
-  skill", "skill for", "turn this into a skill", "improve this skill", "skill-creator",
-  "tofui-skill-creator", "run evals", "optimize the description", "package the skill".
+  improve a skill or rules file, run skill evals, benchmark a skill, optimize a skill
+  description, or package a skill. Also use it before writing or modifying any reusable
+  agent instruction file (skills, rules, CLAUDE.md snippets, agent prompts), even if the
+  user did not say "skill". Triggers include "make a skill", "new skill", "skill for",
+  "turn this into a skill", "skill-creator", "tofui-skill-creator", "run evals", "optimize
+  the description", "package the skill".
 ---
 
 # Tofui Skill Creator
