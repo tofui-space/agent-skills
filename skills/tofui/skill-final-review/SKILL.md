@@ -5,16 +5,23 @@ description: "Final pre-ship review of a drafted skill across six fronts: confli
 
 # Final Skill Review
 
-The last pass before a drafted skill is packaged, installed, or called done. Six fronts, one report, edits only after the user picks which findings to act on.
+The last pass before a drafted skill is packaged, installed, or called done. A fresh agent reviews the skill across six fronts, a second fresh agent tries to disprove each finding, and the user decides per finding: fix it, give it another pass, or drop it. After fixes, a check confirms that the fixes introduced no new conflicts.
 
 ## The failure this stops
 
 The reviewer is almost always the author. Having written the draft, you know what each line was meant to do — so a hedge reads as prudence, a restatement reads as emphasis, and an example lifted from the conversation that produced the skill reads as helpful grounding. All three survive a reread, because intent supplies meaning the page does not carry. The reader who actually runs the skill is a fresh session with none of that context. They get only the page.
 
-Two consequences shape the whole procedure:
+Three consequences shape the whole procedure:
 
+- **Review from a fresh context.** The session that drafted the skill is the worst reviewer of it, so the review runs in an agent that has only the files.
 - **Read the file from disk.** Reviewing the draft as remembered replays the intent instead of reading the text. Open it.
 - **Report before editing.** Fixing on sight turns a finding the user might have overruled into a silent change.
+
+The report has a second reader problem. The user who decides on the findings has often not read the skill closely: they may have written the request and delegated the drafting. A finding that only points at a line ("front 2 — 'where appropriate' — never binds") cannot be judged without reading the skill, which is the work the user delegated. So every finding carries the text it judges and explains the problem in full sentences.
+
+And the review itself is unreliable. Most findings predict how a model will read a rule, and reading the rule cannot confirm the prediction. A reading-based review produces false positives, and a checklist that demands findings produces more of them. The report states this, rates each finding's confidence by the evidence behind it, and says where each finding came from, so the user can see which findings to trust and which to check.
+
+**A finding needs a scenario.** Report a finding only when you can write the concrete situation in which a future session does the wrong thing, or the concrete cost it adds. A checklist requirement below ("check each rule for an anti-domain") tells you where to look; it is not a finding on its own. If you cannot write the scenario, drop it.
 
 ## When to run it
 
@@ -22,16 +29,56 @@ On request: any ask to review, proof, or sign off a skill before it ships.
 
 Unprompted: offer once, in one line, when a draft has been shown to the user at least once and the next move is packaging, installing, testing, or "looks good". Earlier than that the draft is still moving and a review only relitigates decisions in flight. If the offer is declined, drop it.
 
-## Setup
+## Options
 
-Read the draft file. Read the `name` and `description` of every other installed skill — that pair is where conflict and overlap live. Then measure:
+Read both options from the user's request. When the user does not state one, use the default, and name both settings in the report header so the user can change them.
 
-```bash
-wc -w <path>/SKILL.md ~/.claude/skills/*/SKILL.md | sort -n
-# on claude.ai the installed corpus is /mnt/skills/user/*/SKILL.md
-```
+- **Verification** — default **on**. A second agent tries to disprove every finding before the user sees the report. The user turns it off with phrases such as "no verification" or "quick review". It costs extra time and tokens on every review.
+- **Reader** — default **has not read the skill**. The report quotes enough text to judge each finding without opening the file, and it recommends a decision for each finding. The user switches to **knows the skill** with phrases such as "I know this skill" or "I wrote it myself"; quotes may then be shorter, and the report makes no recommendations.
 
-Count the description separately; it is priced differently (front 6).
+## Procedure
+
+When the environment offers subagents (agents that start from a fresh context), run the steps below as separate agents. When it does not, run them in this session, and say in the report header that the review and verification ran in this session rather than in fresh agents. When this session drafted or edited the skill, add that author bias was therefore not removed.
+
+### Step 1 — Review
+
+Start a fresh agent. Give it the path of this file and the path of the skill under review, and tell it to rely only on files, not on any conversation. It does the following:
+
+1. Reads every file of the skill under review.
+2. Reads the `name` and `description` of every other installed skill, because that pair is where conflict and overlap live.
+3. Measures sizes:
+
+   ```bash
+   wc -w <path>/SKILL.md ~/.claude/skills/*/SKILL.md | sort -n
+   # on claude.ai the installed corpus is /mnt/skills/user/*/SKILL.md
+   ```
+
+   It counts the description separately, because the description is priced differently (front 6).
+4. Checks the six fronts below and writes each finding in the format under "Report format", without the Verification and Recommendation lines, and with the second half of Origin left blank.
+
+### Step 2 — Verify (skip when verification is off)
+
+Start a second fresh agent. Give it the findings, the path of the skill, and the skill's history: its rationale or reference files, and, when the skill is in a git repository, the output of `git log --follow -p -- <skill-dir>`. Its job is to disprove each finding, not to confirm it. For each finding it checks:
+
+- **The quote.** Is it verbatim, and is it quoted in enough context? Does another line of the skill already resolve the problem?
+- **The scenario.** Does it follow from a plain reading of the text, or only from an unlikely one?
+- **The labels.** Are the kind, severity, and confidence justified by the evidence?
+- **Common false positives:**
+  - A checklist requirement reported with no real scenario.
+  - A scenario that needs an unlikely reading when a plain reading exists.
+  - A problem already resolved elsewhere in the skill.
+  - A preference presented as a defect.
+  - Severity inflated: a cost reported as blocking.
+  - Confidence inflated: a prediction reported as high.
+  - A deliberate rule misread as a mistake, when the page itself states the reason.
+
+**History rule.** The history shows why a rule was written, which helps catch findings that misread a deliberate rule. It also brings back the author's intent, which is exactly what lets a flawed page look fine. So history refutes a finding only when the page itself carries the intent. When the intent is stated only in a commit message or a rationale file the skill never points to, the finding stands, and the fix is to put that intent into the skill.
+
+For each finding, the agent returns a verdict with its reason: **confirmed**, **changed** (with the corrected labels), or **refuted**. A refutation quotes the line that resolves the problem; without it, the finding stands.
+
+### Step 3 — Report
+
+Write the report in this session, from the verified findings, in the format below. Before writing, fill in the second half of each Origin that is blank: "written in the drafting session" when this session wrote or edited the flagged text, otherwise "pre-existing text". Do the same for findings returned by another pass or the post-fix check. Refuted findings are not hidden: list them in one line each with the reason they were refuted, so the user can see how many false positives the first pass produced.
 
 ## The six fronts
 
@@ -41,7 +88,7 @@ Catches: two rules that cannot both be satisfied; a rule that contradicts anothe
 
 Test: for each rule, name the situation it fires in and the action it forces. Two rules firing on one situation with different actions is a conflict. Resolve it with a precedence line in the file, not by trusting the reader to choose well.
 
-Every behavior-constraining skill also needs one sentence on what wins against an explicit user instruction and against other skills. Absence of that line is a finding.
+Check whether a behavior-constraining skill says what wins against an explicit user instruction and against other skills. A missing line is a finding when you can name the instruction or installed skill it would collide with and what a session would then do.
 
 Not a finding: rules that overlap and agree; a rule that is merely strict.
 
@@ -51,7 +98,7 @@ Two directions, opposite failures.
 
 **Hatch.** An exception whose condition cannot be evaluated before acting: "where appropriate", "use judgment", "if it makes sense", "generally", "try to", "consider". A rule with an undecidable exception is a suggestion, and it gets skipped precisely when following it would have cost something — which is when it mattered. Test: can the reader tell, before acting, whether the exception applies? Decidable exceptions stay ("skip for creative writing", "skip when the user asked to be taught"). Undecidable ones get deleted or given a named condition.
 
-**Missing exception.** A rule with no stated boundary fires where it does damage. Every behavior-changing rule needs an anti-domain.
+**Missing exception.** A rule with no stated boundary fires where it does damage. Check each behavior-changing rule for an anti-domain; the absence is a finding when you can name a situation where the rule fires and the result is wrong.
 
 Not a finding: a hedge whose criteria the file supplies elsewhere. Judgment with stated inputs is a method; judgment standing alone is a hatch.
 
@@ -59,7 +106,7 @@ Not a finding: a hedge whose criteria the file supplies elsewhere. Judgment with
 
 Three kinds: restates default model behavior; restates another line in the same file; unreachable in practice.
 
-Test: delete the line and name the output that changes. If nothing changes, it was noise. If `anti-vacuity` is installed, its clause test is the instrument here — apply it, do not restate it.
+Test: delete the line and name the output that changes. If nothing changes, it was noise.
 
 Not a finding: a rule that states a default *because the default fails under pressure*, with the reason attached. The stated "why" is what stops a future session from reasoning the rule away, and it earns its words.
 
@@ -97,40 +144,152 @@ Overlap is the other cost: if an installed skill already carries a rule, referen
 
 ## Report format
 
-```
-FINAL REVIEW — <skill-name>
-Verdict: ship | fix first — <n> blocking, <m> non-blocking
-Size: body <N>w · description <M>w · corpus median <X>w, max <Y>w
+Write the report for the reader set by the Reader option. Every sentence is a full sentence; no line is a chain of fragments joined by dashes.
 
-BLOCKING
-<front> — "<verbatim span>" — <what goes wrong in a future session> — <proposed fix>
+**Header**, in this order:
 
-NON-BLOCKING
-<front> — "<verbatim span>" — <what it costs> — <proposed fix>
+1. The skill name and a verdict. **Fix first** if any blocking finding has high or tested confidence. **Check first** if the blocking findings are all medium or low confidence. **Ship** if nothing is blocking.
+2. The counts: how many findings, how many are blocking if real, how many are tested, high, medium, or low confidence, and how many were refuted by verification.
+3. The settings: verification ran, or was skipped and why; the reader setting; and whether the steps ran in separate agents or in this session.
+4. This sentence, verbatim: "These findings come from reading the skill, not from running it, except where marked tested. Reading-based reviews produce false positives; the low-confidence findings are the most likely ones."
+5. Size, in words: the body, the description, and the corpus median and maximum.
 
-CLEAN: <fronts with no findings>
-```
-
-Blocking means the skill will behave wrongly for a future reader, or that it leaks private data. Non-blocking means cost, redundancy, or tidiness. Naming the clean fronts matters: it makes the review auditable, and a front that is genuinely clean should be visible as checked rather than skipped.
-
-Worked lines:
+**Each finding** gets an ID: **B** for blocking if real, **N** for non-blocking, numbered in report order (B1, B2, N1). IDs stay fixed for the rest of the session; findings found later continue the numbering. IDs are assigned when the user first sees the report, from the verified labels. After that, an ID never changes, even when a later pass changes the finding's severity; the report then says 'now non-blocking' or 'now blocking' next to the ID. Order the findings by severity, then confidence:
 
 ```
-BLOCKING
-escape hatch — "apply this where it seems appropriate" — never binds; skipped exactly when it costs something — name the condition: "apply to every PR touching auth"
-leakage — "e.g. J. Doe's PR #412 in acme-billing-api" — names a person and an internal repo — "e.g. a self-merged PR carrying an AI-written review"
+### B1. <the problem, in one plain sentence>
+
+What the skill says now (<file>:<line>):
+> <verbatim excerpt: enough lines that the reader understands the rule without opening the file;
+>  for a conflict, quote both sides; for something missing, quote the rule that lacks it>
+
+What goes wrong: <the scenario, in full sentences: the situation, what a future session does, and why>
+
+Proposed fix: <the replacement or added text, quoted>
+
+- Kind: contradiction in the text | predicted misreading | missing boundary | leak | stale claim | cost
+- Severity if real: blocking | non-blocking, because <one sentence>
+- Confidence: tested | high | medium | low, because <what the evidence is>
+- Origin: <the check that found it> · <pre-existing text | written in the drafting session>
+- Verification: confirmed | changed from <old label>, because <reason> | not run
+- Recommendation: fix | another pass | drop, because <reason>   (only when the reader has not read the skill)
+```
+
+**Confidence** follows from the evidence, not from how sure the finding feels:
+
+- **Tested:** a session was run and showed the failure.
+- **High:** the problem is visible in the quoted text alone: two quoted lines contradict, a leaked name is in the quote, or a referenced file was checked and does not exist.
+- **Medium:** the scenario follows from the wording, but no session was run to see it happen.
+- **Low:** the scenario depends on an assumption about the reader or the model that the reviewer cannot check.
+
+**Origin** names the front and test that found the finding. It also says whether the session that runs this review wrote or edited the flagged text. Only that session knows this, so a review, verification, another-pass or post-fix agent keeps the value it was given and otherwise leaves it blank for that session to fill. When that session wrote the text, say so: that is the case where author bias is strongest, in both directions.
+
+**Recommendation** follows from the labels, so the user can predict it: **fix** for tested or high confidence; **another pass** for a blocking finding with medium or low confidence; **drop** for a non-blocking finding with low confidence. For a non-blocking finding with medium confidence, recommend **fix** when the fix is one line and **another pass** otherwise. A finding that has already had another pass is not recommended for another pass again: recommend **fix** when it is tested, and otherwise recommend **fix** or **drop**, and name the evidence that would change the recommendation. The recommendation is the reviewer's, not a decision.
+
+**After the findings:**
+
+1. One line per refuted finding, with its ID and the reason it was refuted.
+2. One line listing the fronts checked with no findings, so the reader can see they were checked and not skipped.
+3. The decision request, verbatim:
+
+   ```
+   Reply with the IDs to act on:
+   Fix: <IDs>
+   Another pass: <IDs>
+   Findings you do not list are dropped.
+   ```
+
+**Before sending, check every finding:**
+
+- The quote is verbatim and long enough to understand without opening the file. When the reader setting is knows the skill, the quote only needs to be long enough to locate the rule.
+- The scenario names the situation, what a session does, and why, in full sentences with their "because" or "so".
+- The fix is quoted text, not a description of a fix.
+- Each label has its value and its "because".
+
+If a finding fails, restore what is missing. A finding shortened below this checklist, by any rule other than the reader setting, reads as complete while it is not, so the user cannot tell that a reason was dropped.
+
+Worked example (for an invented meeting-notes skill, reader has not read the skill):
+
+```
+### B1. Two rules disagree about the closing summary
+
+What the skill says now (SKILL.md:14 and SKILL.md:31):
+> Line 14: "Always end the notes with a summary of the decisions."
+> Line 31: "Never repeat content that already appears in the notes."
+
+What goes wrong: A summary of the decisions repeats decisions already in the notes, so every set of notes breaks one of the two rules. A session that follows line 31 drops the summary, which is the part a reader who missed the meeting needs most.
+
+Proposed fix: add to line 31: "The closing summary of decisions is exempt."
+
+- Kind: contradiction in the text
+- Severity if real: blocking, because one rule is broken in every set of notes
+- Confidence: high, because both lines are quoted above and the conflict is visible without running anything
+- Origin: conflict check (front 1) · pre-existing text
+- Verification: confirmed, because no other line of the skill exempts the summary
+- Recommendation: fix, because the contradiction is visible in the text
+
+### B2. The length limit may push out decisions
+
+What the skill says now (SKILL.md:9):
+> "Keep the notes under one page."
+
+What goes wrong: For a two-hour meeting with many decisions, a session may cut decisions to fit one page, because the rule gives no priority between length and completeness.
+
+Proposed fix: "Keep the notes under one page; if the decisions do not fit, keep every decision and cut the discussion."
+
+- Kind: missing boundary
+- Severity if real: blocking, because a dropped decision makes the notes wrong
+- Confidence: medium, because the scenario follows from the wording, but no session was run on a long meeting
+- Origin: missing-exception check (front 2) · written in the drafting session
+- Verification: confirmed, because no other line sets a priority between length and decisions
+- Recommendation: another pass, because a test run on a long meeting would show whether decisions are actually dropped
+
+Refuted: N1 (flagged "Use the attendees' names" as a leak; the skill's line 3 states that names come from the meeting invite, so no real name is in the skill).
+Checked with no findings: noise, leakage (its only finding was refuted), staleness, token cost.
+
+Reply with the IDs to act on:
+Fix: <IDs>
+Another pass: <IDs>
+Findings you do not list are dropped.
 ```
 
 ## After the report
 
-The user picks what to apply. Apply those, re-measure both word counts, and state the new numbers.
+The user replies with a **Fix** list and an **Another pass** list. Findings in neither list are dropped and not raised again in this session.
 
-One pass. A second full review of the edited draft returns wording churn rather than findings. Re-run a single front only when an applied fix added a new rule or rewrote more than a paragraph, and re-run only that front.
+When the user questions a finding, answer from the quoted text and the scenario; do not ask them to read the skill.
+
+### Fix
+
+Apply the listed fixes, re-measure both word counts, and state the new numbers. Then run the post-fix check below. Fixes are not done until it passes.
+
+### Another pass
+
+Start a fresh agent with the listed findings, the skill's files, and the skill's history, and tell it to go deeper than the first review could. For each finding it:
+
+1. Rereads the whole skill, not only the quoted lines, to check whether another rule resolves the problem.
+2. Checks the history, under the history rule in Step 2.
+3. Compares the finding with the common false positives listed in Step 2.
+4. **Runs a test when the finding predicts a misreading.** It writes, before running anything, a prompt built to trigger the scenario and the observable result that counts as failure. It then runs two fresh sessions that get only the skill file, treat it as loaded, load no other skill except the installed skills the finding's scenario names, which are loaded too, and answer that prompt. It judges each reply against the failure criterion it wrote beforehand. If the failure appears, the confidence becomes **tested**. If it appears in neither run, the confidence becomes **low**, with "not reproduced in two runs"; that is weak evidence against the finding, not proof, because model output varies and the test session may run on a different model than the one the skill will run on.
+
+Without subagents, step 4 cannot run, because a test session must start without this conversation. Say so in the pass report; the confidence of a predicted misreading then cannot become tested.
+
+Report each finding again in the full format, with the verdict **confirmed**, **changed**, or **refuted**, then end with the same decision request.
+
+### Post-fix check
+
+After any fix, start a fresh agent with the diff of the applied fixes and the whole skill. Without subagents, run the check in this session and say in its first line that the session that applied the fixes also checked them, so author bias was not removed. It runs front 1 (conflict) and front 2 (escape hatches and missing exceptions) on every changed line against every other line of the skill, and it checks that each fix actually removes the scenario of the finding it fixed. A fix often adds a rule that collides with an older line elsewhere in the file, and the review that proposed the fix did not look for that.
+
+Report new findings in the full format, with IDs continuing the session's numbering, then end with the decision request. When there are none, say so in one line that also names how many changed lines were checked. Repeat after each round of fixes until the check finds nothing or the user stops.
+
+No second full review of the edited skill: it returns wording churn rather than findings. Another pass and the post-fix check cover what changed.
 
 If the description changed and skill-creator's description optimizer is available, this is the point to run it.
 
 ## Precedence
 
-Findings are advisory. The user decides which to apply, including blocking ones, and a declined finding is dropped rather than raised again in the same session.
+Findings are advisory. The user decides on each one, including blocking ones: fix, another pass, or drop. A dropped finding is not raised again in the same session, unless the post-fix check finds that a later fix reintroduced the same problem.
 
-Against other skills: this file governs the content of the review, not the shape of the rest of the response. The findings block is a mandated output format and stays as specified; the surrounding prose follows whatever formatting skills are active.
+Against other skills, output styles, and standing instructions to be brief: the report is exempt from every length cap, compression rule, and clause-deletion test that does not come from the user in this conversation. This covers other installed skills, the active output style, and system-prompt instructions about brevity. Those rules exist to shorten routine replies; a finding is the one place where the reader cannot recover a dropped reason, because they have not read the skill. Other writing rules may still make a finding clearer, for example by naming a source or moving the key word earlier, but only when every part in the checklist under "Report format" survives intact. The prose around the report follows whatever writing rules are active.
+
+An explicit request from the user in this conversation ("shorter review", a reading-time budget) does apply. Meet it by dropping whole findings, lowest severity and confidence first, and name the dropped ones in one line. Never meet it by shortening the findings that remain. "Quick review" only turns off verification (see Options); it is not a request to drop findings.
