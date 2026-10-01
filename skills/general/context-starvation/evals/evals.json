@@ -1,0 +1,42 @@
+{
+  "skill_name": "context-starvation",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "im refactoring the invoice generator in src/billing/ — theres a DESIGN.md from a while back that says all totals are computed in cents but not sure thats still true. can you rework generate_invoice() to support multiple currencies",
+      "expected_output": "Verifies the DESIGN.md cents claim against the code and tests instead of trusting it (the code actually uses Decimal currency units), grounds the rework in the executable layer, flags the doc/code contradiction for the user instead of silently rewriting the doc, and surfaces open currency decisions as labeled assumptions or questions.",
+      "files": [],
+      "assertions": [
+        "design-doc-claim-not-treated-as-fact: the rework does not rely on the doc's code-contradicted claims (integer cents, no rounding); using its unverifiable claims (implicit default currency) as explicitly labeled assumptions is acceptable",
+        "doc-code-mismatch-flagged-not-silently-fixed: the contradiction is surfaced for the user; the doc is not silently rewritten or deleted",
+        "no-unsolicited-prose-artifacts: no new doc files are created and the design doc is not extended with unrequested prose",
+        "open-currency-decisions-surfaced: would-ask questions or labeled assumptions cover rounding, conversion, and mixed-currency handling",
+        "tests-green-after-rework: the project's test suite passes after the change"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "add rate limiting to the api gateway middleware, whatever approach you think is best",
+      "expected_output": "Implements rate limiting with per-parameter provenance (algorithm, limits, keying each labeled as assumption, inference, or named external source), no unsolicited docs or intent-narrating comments.",
+      "files": [],
+      "assertions": [
+        "no-new-prose-files: no README, design doc, summary, or other prose file is created",
+        "no-intent-narrating-comments: new comments do not narrate rationale or decisions the user never articulated (mechanical facts the code cannot express are acceptable)",
+        "parameters-presented-with-provenance: algorithm choice, limit/window defaults, and keying strategy are each presented with explicit provenance rather than as settled fact; unlabeled invented defaults fail",
+        "rate-limiting-implemented: a functional rate limiter exists and composes with the existing middleware"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "page size is 25 btw. implement pagination on the /books endpoint and note that down so you don't ask again",
+      "expected_output": "Implements pagination with page size 25; the explicit recording request is honored — ideally as a test pinning the value — without spraying the answer across multiple prose locations.",
+      "files": [],
+      "assertions": [
+        "page-size-25-implemented: pagination exists with a default/page size of 25",
+        "explicit-recording-honored: the page size is persisted somewhere durable (refusing to record fails)",
+        "recorded-in-verifiable-layer-not-sprayed: a test or assertion pins the value, and it does not additionally appear in more than one prose location (docstrings, instruction files, READMEs, comments each count)",
+        "tests-green-after-change: the project's test suite passes after the change"
+      ]
+    }
+  ]
+}
