@@ -1,11 +1,11 @@
 ---
 name: skill-final-review
-description: "Final pre-ship review of a drafted skill across six fronts: conflict and logical risk against other installed skills, escape hatches and missing exceptions, noise that restates default behavior, leaked personal or case-specific detail, stale claims about models, tools or sibling skills, and token cost measured against the installed corpus. Offer it unprompted, once, as soon as a draft has been shown to the user and the conversation turns to packaging, installing, testing, or approval. Also invoke on 'final review', 'review this skill', 'proof the skill', 'is this skill ready', 'skill-final-review', or any request to check a skill before shipping. Do NOT use while a skill is still being scoped or drafted — that is skill-creator's job — and not for validating code changes or builds."
+description: "Final pre-ship review of a drafted skill across six fronts: conflicts, escape hatches, noise, leaked personal detail, stale claims, and token cost. Offer it unprompted, once, as soon as a draft has been shown to the user and the conversation turns to packaging, installing, testing, or approval. Also invoke on 'final review', 'review this skill', 'proof the skill', 'is this skill ready', 'skill-final-review', or any request to check a skill before shipping. Do NOT use while a skill is still being scoped or drafted — that is skill-creator's job — and not for validating code changes or builds."
 ---
 
 # Final Skill Review
 
-The last pass before a drafted skill is packaged, installed, or called done. Six fronts, one report, edits only after the user picks which findings to act on.
+The last pass before a drafted skill is packaged, installed, or called done.
 
 ## The failure this stops
 
@@ -27,9 +27,13 @@ Unprompted: offer once, in one line, when a draft has been shown to the user at 
 Read the draft file. Read the `name` and `description` of every other installed skill — that pair is where conflict and overlap live. Then measure:
 
 ```bash
-wc -w <path>/SKILL.md ~/.claude/skills/*/SKILL.md | sort -n
+SKILLS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"   # env var wins; it often points elsewhere
+compgen -G "$SKILLS/*/SKILL.md" >/dev/null || echo "NO CORPUS at $SKILLS — front 6 cannot run"
+wc -w <path>/SKILL.md "$SKILLS"/*/SKILL.md | sort -n
 # on claude.ai the installed corpus is /mnt/skills/user/*/SKILL.md
 ```
+
+Resolve the directory rather than assuming `~/.claude`; a hardcoded path can still hold a stale corpus, so it returns plausible numbers instead of failing. If the glob is empty, say front 6 could not run — do not report size against nothing.
 
 Count the description separately; it is priced differently (front 6).
 
@@ -59,7 +63,9 @@ Not a finding: a hedge whose criteria the file supplies elsewhere. Judgment with
 
 Three kinds: restates default model behavior; restates another line in the same file; unreachable in practice.
 
-Test: delete the line and name the output that changes. If nothing changes, it was noise. If `anti-vacuity` is installed, its clause test is the instrument here — apply it, do not restate it.
+Test: delete the line and name the output that changes. If nothing changes, it was noise.
+
+Two installed skills own instruments here — apply them, do not restate them. `anti-vacuity`'s clause test is the one for a single line. `writing-great-skills` names the shapes: **duplication** is the second kind, **sediment** the third.
 
 Not a finding: a rule that states a default *because the default fails under pressure*, with the reason attached. The stated "why" is what stops a future session from reasoning the rule away, and it earns its words.
 
@@ -79,9 +85,7 @@ Two halves, with different evidence standards.
 
 **Claims about the world** — a named model, a tool, a file path, another installed skill — are checkable right now. A reference to something that no longer exists under that name is a finding, and it blocks when a future session would act on it rather than notice it.
 
-**Behavioral guardrails** — rules that exist because a model does something unhelpful — are not checkable from the inside. You cannot confirm a behavior is gone by not observing it in yourself, and the rule may be the reason it is absent. "Current models don't do that anymore" is the same unreliable self-report the guardrail was written to catch. Raise these as a question: name the rule, name the behavior it targets, state that the evidence is unavailable, and leave removal to the user. The cheap test is running the skill without the rule, not introspection.
-
-Scope compounds this. A skill may run on a model other than the one reviewing it, so a guardrail that is dead weight for one can be load-bearing for a smaller or older one.
+**Behavioral guardrails** — rules that exist because a model does something unhelpful — are not checkable from the inside: you cannot confirm a behavior is gone by not observing it in yourself, and the rule may be why it is absent. Raise these as a question — name the rule, name the behavior it targets, state that the evidence is unavailable — and leave removal to the user. The cheap test is running the skill without the rule, not introspection. Scope compounds it: the skill may run on a model other than the one reviewing it, so a guardrail that is dead weight here can be load-bearing there.
 
 The fix is rarely deletion. A version-pinned claim earns a check that confirms the assumption and stops if it fails, so the skill breaks loudly instead of mis-routing in silence.
 
@@ -91,39 +95,63 @@ Not a finding: a rule that names a model, tool or version and verifies it before
 
 Two budgets at different prices. The description loads into every conversation whether or not the skill triggers; the body loads only when it does. So the description takes the harshest cut: trigger phrases, contexts, anti-triggers, nothing else. Explanation belongs in the body.
 
-For the body, compare rather than guess. Name the three installed skills nearest in size and ask whether this skill's scope is comparable to theirs. A single-rule skill sitting above the corpus median is over-written. A multi-domain reference skill sitting at the top is fine. Past the corpus maximum, either cut or split the depth into `references/` with a pointer from SKILL.md.
+For the body, compare rather than guess. Name the three installed skills nearest in size and ask whether this skill's scope is comparable to theirs. A single-rule skill sitting above the corpus median is over-written. A multi-domain reference skill sitting at the top is fine. Past the corpus maximum it is **sprawl** in `writing-great-skills`'s terms — apply its ladder rather than re-deriving one.
 
 Overlap is the other cost: if an installed skill already carries a rule, reference it by name instead of copying it. Duplicated rules are paid for twice and drift apart the first time one copy is edited.
 
 ## Report format
 
-```
-FINAL REVIEW — <skill-name>
-Verdict: ship | fix first — <n> blocking, <m> non-blocking
-Size: body <N>w · description <M>w · corpus median <X>w, max <Y>w
+**The report is the response.** Do not narrate the fronts on the way to it, restate the method, or summarize after it. A front with no finding appears in the Clean line and nowhere else.
 
-BLOCKING
-<front> — "<verbatim span>" — <what goes wrong in a future session> — <proposed fix>
+**Number every finding** — `B1, B2, …` blocking, `N1, N2, …` non-blocking. The number is the handle the user selects by, so it appears even when there is a single finding.
 
-NON-BLOCKING
-<front> — "<verbatim span>" — <what it costs> — <proposed fix>
+**Quote at most ten words** of the draft. Elide the middle of anything longer — `"apply this rule … where it seems appropriate"` — and cite the line number instead when the span runs to a paragraph. An unbounded quote buries the diagnosis under the thing being diagnosed. The same cap applies to the counterpart in a conflict finding: cite the other skill or rule as `path:line` and quote at most ten words of it.
 
-CLEAN: <fronts with no findings>
+**Risk and Fix are one sentence each, two at most.** The report is a menu the user selects from. The argument for a finding is given when the user asks about its ID, not in the report.
+
+**The front label is one of the six front names** — conflict, escape hatch, missing exception, noise, leakage, staleness, token cost. No invented categories.
+
+**Emit markdown, not a code fence.** The labels only do their work if they render, and a fenced line does not wrap in a terminal, so a long finding is clipped instead of read. Drop a section with no findings rather than printing an empty heading. With no findings at all, the report is the three header bullets and stops: the verdict is `ship`, and an apply prompt offering IDs that do not exist is worse than no prompt.
+
+```markdown
+**FINAL REVIEW — <skill-name>**
+
+- **Verdict:** <ship | fix first> — <n> blocking, <m> non-blocking
+- **Size:** body <N>w, description <M>w (corpus median <X>w, max <Y>w)
+- **Clean:** <fronts with no findings>
+
+### Blocking
+
+**B1 · <front>** — "<span>"
+- Risk: <what goes wrong in a future session>
+- Fix: <proposed fix>
+
+### Non-blocking
+
+**N1 · <front>** — "<span>"
+- Cost: <what it costs>
+- Fix: <proposed fix>
+
+**Apply which?** Reply with IDs (`B1 N1`), `all`, or `none`.   <omit when there are no findings>
 ```
 
 Blocking means the skill will behave wrongly for a future reader, or that it leaks private data. Non-blocking means cost, redundancy, or tidiness. Naming the clean fronts matters: it makes the review auditable, and a front that is genuinely clean should be visible as checked rather than skipped.
 
-Worked lines:
+Worked findings:
 
-```
-BLOCKING
-escape hatch — "apply this where it seems appropriate" — never binds; skipped exactly when it costs something — name the condition: "apply to every PR touching auth"
-leakage — "e.g. J. Doe's PR #412 in acme-billing-api" — names a person and an internal repo — "e.g. a self-merged PR carrying an AI-written review"
+```markdown
+**B1 · escape hatch** — "apply this where it seems appropriate"
+- Risk: never binds; skipped exactly when following it would have cost something
+- Fix: name the condition — "apply to every PR touching auth"
+
+**B2 · leakage** — "e.g. J. Doe's PR #412 in acme-billing-api"
+- Risk: names a person and an internal repo
+- Fix: "e.g. a self-merged PR carrying an AI-written review"
 ```
 
 ## After the report
 
-The user picks what to apply. Apply those, re-measure both word counts, and state the new numbers.
+Apply exactly the IDs the user names; `all` means every finding, `none` ends the review. Then re-measure both word counts and state the new numbers in one line.
 
 One pass. A second full review of the edited draft returns wording churn rather than findings. Re-run a single front only when an applied fix added a new rule or rewrote more than a paragraph, and re-run only that front.
 
@@ -133,4 +161,6 @@ If the description changed and skill-creator's description optimizer is availabl
 
 Findings are advisory. The user decides which to apply, including blocking ones, and a declined finding is dropped rather than raised again in the same session.
 
-Against other skills: this file governs the content of the review, not the shape of the rest of the response. The findings block is a mandated output format and stays as specified; the surrounding prose follows whatever formatting skills are active.
+This skill decides *which* findings are applied, not how the file is then written. Where a skill-authoring skill is installed, the apply step runs under it — its privacy seal above all, since a leakage fix written outside the seal is the failure this review exists to catch.
+
+Against other skills: the report is a mandated output format and stays as specified — a formatting skill may not restructure it, and none of them licenses adding the preamble or summary the format rules out. Every other turn of the conversation follows whatever formatting skills are active.
