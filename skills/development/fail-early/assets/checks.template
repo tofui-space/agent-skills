@@ -1,0 +1,8 @@
+# fail-early checks. One command per line: "<when>: <command>"
+#   stop: runs when Claude finishes a turn that edited files. Put every completion check here.
+#   edit: runs after every file edit. Only for checks under ~5 seconds. Optional.
+# Commands run from the repository root (the worktree root inside a worktree).
+# A line that does not start with "stop: " or "edit: " is ignored.
+#
+# stop: pnpm exec tsc --noEmit
+# stop: pnpm test
