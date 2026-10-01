@@ -1,0 +1,23 @@
+{
+  "skill_name": "grill-with-specs",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "ok new feature for the library app: members should be able to reserve a book thats currently out on loan. can you grill me on the requirements and write them up in the repo? we have nothing written down yet",
+      "expected_output": "Reads the repo first and reports the stack in a few lines. Opens with one numbered framing round of at most five open questions. Does not create docs/spec/ or write any item before the user confirms. Later rounds are numbered, capped at ten items, mix Q/C/I kinds, and every I item carries a source and a recommended verdict.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "spec this out: a small internal HTTP service that turns uploaded CSV files into JSON, fresh repo, node + fastify. just the essentials, I don't have all day",
+      "expected_output": "Runs the framing round, then exactly one research round covering data handling, error handling, and security only. Candidates cite primary sources (RFC 9457, OWASP ASVS, Fastify docs) or are labeled 'industry practice, no standard cited'. Closes with a research note listing every unresearched area under 'Not yet researched'.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "we already have docs/spec/ with about 20 requirements for the invoicing module. what are we missing? go through it and find the gaps, but don't add anything without asking me",
+      "expected_output": "Reads existing IDs and the declined list in research.md, continues numbering from the highest existing ID, never re-proposes a declined candidate, raises contradictions with existing items as conflicts rather than new items, and writes only user-confirmed items.",
+      "files": []
+    }
+  ]
+}
