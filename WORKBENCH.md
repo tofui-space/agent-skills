@@ -40,6 +40,7 @@ yes — it stops the question being asked again.
 | [grill-with-specs](#grill-with-specs) | development | ✓ | ✓ | ✓ | ✓ | · | land |
 | [gitbutler-readonly](#gitbutler-readonly) | development · rule | ✓ | ✓ | ✓ | ✓ | · | land; two findings deferred on purpose |
 | [gitbutler-sorting](#gitbutler-sorting) | development | ✓ | · | · | · | · | run probe 3, then draft |
+| [language](#language) | writing · rule | ✓ | ✓ | · | ✓ | · | review, then land |
 
 The `?` marks were inferred from the filesystem on 2026-09-13, not from records. Treat them as "no
 evidence either way" and check rather than assume.
@@ -281,3 +282,23 @@ with one inbox branch for anything that cannot be placed confidently.
 dependency failure, untracked files predating a checkpoint, collision on apply, 20-cycle endurance);
 write the SKILL.md; write the small script behind the change listing and the conservation check;
 name the skill.
+
+---
+
+### language
+
+`writing` · rule, not a skill · drafted 2026-10-13 · body 824w
+
+Sets the language for everything written to English in its international variety, and rules out British English. First entry in a new `writing` category.
+
+**Decided:**
+
+- **Spelling is stated as coinciding with American English.** The rule says so in one sentence, because "international" alone gives no way to settle a word the table does not list.
+- **Tie-break for unlisted words:** the spelling used by the keywords and standard library of a mainstream programming language, then the first-listed spelling in an American English dictionary.
+- **Standardized forms outrank the spelling table.** IUPAC "aluminium" and "caesium" stay. For the same reason the `-er` row leaves out "meter" and "liter": the English SI brochure spells them "metre" and "litre", so listing them would contradict the rule's own exception.
+- **Existing British text is not converted.** New text follows the rule; untouched lines stay, and the mix is reported once. Existing identifiers are never renamed for spelling.
+- **Negative-pronoun clauses are banned as descriptions only.** "A function that nothing calls" and "is called by nothing" are out; a main-clause statement that an actor is missing ("Nobody owns this service") stays, because there the absence is the point.
+- **Dates, number formats, units, and punctuation style are out of scope.** The rule covers language variety only.
+- **No rationale about which regions or institutions use which variety.** The rule argues from the reader and from searchability only.
+
+**Left:** review; land.
