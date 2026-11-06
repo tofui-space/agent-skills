@@ -1,13 +1,33 @@
 ---
 paths:
-  - "**/*.{py,pyi,ts,tsx,mts,cts,rs,go,cs,kt,kts,java,c,cc,cpp,cxx,ixx,cppm,inl,ipp,h,hh,hpp,hxx,xml}"
+  - "**/*.{py,pyi,ts,tsx,mts,cts,js,jsx,mjs,cjs,rs,go,cs,kt,kts,java,c,cc,cpp,cxx,ixx,cppm,inl,ipp,h,hh,hpp,hxx,xml}"
 ---
 
 # Comment and documentation conventions
 
 These rules apply to comments and documentation written or modified in this repository.
 
+## Contents
+
+- Prose layout
+- Content
+- Context
+- Python
+- TypeScript and JavaScript
+- Rust
+- Go
+- C
+- C#
+- C++
+- Kotlin
+- Java
+- Android
+- Existing comments
+
 ## Prose layout
+
+When the repository's formatter, linter, or style guide sets a line length for comments or reflows them, follow it; the rules below apply where it leaves the layout open.
+Tools that do this include clang-format with `ReflowComments`, google-java-format, ktfmt, detekt `MaxLineLength`, Checkstyle `LineLength`, and Ruff `E501` and `W505`.
 
 * Put each complete sentence on its own source line.
 * Do not wrap prose at a character or column limit.
@@ -16,11 +36,9 @@ These rules apply to comments and documentation written or modified in this repo
 * Do not join separate sentences to fill a line.
 * Do not reflow unrelated prose.
 
-Formatter line-length settings apply to code, not prose.
-
 ## Content
 
-Add a comment only when it records information the code does not express clearly, such as:
+Add an implementation comment only when it records information the code does not express clearly, such as:
 
 * a documented reason for a non-obvious implementation
 * an external requirement or constraint
@@ -37,6 +55,8 @@ Do not add comments that:
 * use decorative separators
 * contain a TODO without a concrete completion condition
 
+Doc comments on public declarations follow the language sections below.
+
 ## Context
 
 Comments must be understandable from the repository and any references they cite.
@@ -45,10 +65,10 @@ A comment documenting a module, function, method, or class is the abstract inter
 
 Do not refer to:
 
-* prompts, conversations, users, agents, or models
+* the conversation, prompt, or AI agent that produced the change, or the person who requested it
 * requests, discussions, reviews, or generated changes
 * undocumented assumptions
-* information available only outside the repository
+* information a reader cannot reach from the comment, such as an uncited conversation or a ticket without an ID or link
 
 Write from the perspective of the current codebase.
 Describe enduring behavior, constraints, and rationale.
@@ -63,15 +83,18 @@ When the reason is unknown, omit the comment.
 
 * Use docstrings for API documentation.
 * Use `#` comments for implementation rationale.
-* Ruff enforces docstring structure through `D200`, `D205`, `D209`, and `D400`.
+* Begin a docstring with a one-sentence summary on its first line, followed by a blank line when more text follows (PEP 257).
+* A docstring that is only a summary keeps its opening and closing quotes on the same line.
+* When the repository selects them, Ruff checks docstring structure through `D200`, `D205`, `D209`, and `D400`.
 * Ruff does not enforce semantic prose line breaks.
-* A one-line docstring remains on one line as required by `D200`.
 
-## TypeScript
+## TypeScript and JavaScript
 
 * Use `/** ... */` for exported API documentation.
 * Use `//` for implementation rationale.
 * Do not use documentation blocks for ordinary implementation comments.
+* In TypeScript, write `@param name - description`, with no JSDoc `{type}` or `[name]`; TSDoc reports both (`tsdoc-param-tag-with-invalid-type`, `tsdoc-param-tag-with-invalid-optional-name`).
+* In JavaScript, JSDoc `{type}` annotations are the type declarations the TypeScript checker reads, so update them with the code they describe.
 
 ## Rust
 
@@ -86,12 +109,20 @@ When the reason is unknown, omit the comment.
 
 * Use `//` for both documentation and implementation rationale; Go has no separate documentation syntax.
 * Begin a doc comment with the name of the identifier it documents, directly above the declaration, with no blank line between.
-* Document every exported identifier; reserve comments on unexported identifiers for rationale.
+* Document every exported identifier, and each unexported type or function whose behavior is not obvious.
 * Put package documentation above a single `package` clause, or in `doc.go` when it is long.
 * Document the sentinel errors and error types a function can return, and whether a value is safe for concurrent use.
 * Document goroutine ownership and cancellation: who starts it, what stops it, which context governs it.
-* `gofmt` renders indented lines as code blocks, so do not indent prose.
-* Do not use `/* ... */` for documentation comments.
+* Doc comment syntax makes indented lines code blocks, and `gofmt` reformats them as code, so do not indent prose.
+* Use `//` for doc comments; reserve `/* ... */` for package comments.
+
+## C
+
+* Use the documentation comment style the repository already uses: Doxygen `/** ... */` or `///`, or kernel-doc `/** ... */` in kernel-style code.
+* Use documentation blocks only where the repository generates API documentation from them.
+* Use `//` or `/* ... */` for implementation rationale; code compiled as C89 or C90 accepts only `/* ... */`.
+* A `.h` header that C sources include follows this section, even when C++ sources include it too.
+* In kernel-doc, state the `Context:` (whether the function can sleep, and which locks it takes or expects held) and the `Return:` value.
 
 ## C#
 
@@ -118,7 +149,8 @@ When the reason is unknown, omit the comment.
 
 * Use `/** ... */` KDoc for public and internal API documentation.
 * Use `//` for implementation rationale.
-* Use KDoc tags `@param`, `@return`, `@throws`, `@receiver`, and `@sample`, and reference symbols as `[Symbol]`.
+* Describe parameters and the return value in the prose, linking each parameter as `[name]`; use `@param` and `@return` only for a description too long for the prose, or where the codebase follows the AndroidX Compose API guidelines, which require `@param`.
+* Use `@throws`, `@receiver`, and `@sample` where they apply, and reference symbols as `[Symbol]`.
 * Document the threading and suspension contract: which dispatcher a `suspend` function expects, and how it responds to cancellation.
 * Document nullability only where the type system cannot, such as platform types crossing a Java boundary.
 * Do not document an override that adds nothing to the declaration it overrides.
@@ -126,7 +158,7 @@ When the reason is unknown, omit the comment.
 
 ## Java
 
-* Use `/** ... */` Javadoc for public and protected API documentation.
+* Use `/** ... */` Javadoc, or `///` Markdown Javadoc on JDK 23 and later, for public and protected API documentation.
 * Use `//` for implementation rationale.
 * Use `@param`, `@return`, `@throws`, `{@link}`, and `{@code}`.
 * Document thread-safety, mutability, and ownership of returned collections and arrays.
