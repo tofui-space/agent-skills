@@ -1,0 +1,232 @@
+{
+  "partition": "code+spec",
+  "obligations": [
+    {
+      "kind": "contract",
+      "file": "checks/contracts/node@24.ts",
+      "name": "node@24",
+      "clauses": [
+        {
+          "member": "parseArgs",
+          "kind": "throws",
+          "text": "the words do not fit the declared options"
+        }
+      ],
+      "cases": 1
+    },
+    {
+      "kind": "classifier",
+      "input": "unknown",
+      "file": "app/renewal/current-day.classifier.ts",
+      "name": "isCurrentDay",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "Number.isSafeInteger(input)",
+        "typeof input === 'number'"
+      ],
+      "paths": 2,
+      "probes": [
+        "undefined",
+        "not a number",
+        "safe integer"
+      ],
+      "cases": 3
+    },
+    {
+      "kind": "classifier",
+      "input": "string",
+      "file": "app/renewal/library-card.classifier.ts",
+      "name": "isLibraryCard",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "/^(M-[0-9]{6}|S-[A-Z]{2}[0-9]{4})$/.test(header)",
+        "header.length !== 8",
+        "/^M-\\d+$/.test(header)",
+        "/^S-[A-Z][A-Z]\\d+$/.test(header)"
+      ],
+      "paths": 3,
+      "infeasible": 10,
+      "boundary": 34,
+      "probes": [
+        null,
+        "S/------",
+        "M-00000/",
+        "M-:00000",
+        "S-A@0000",
+        "S-[A0000",
+        "S-AA000/",
+        "S-AA:000",
+        "SM-00000",
+        "SS-AA000",
+        "S-@A0000",
+        "S-A[0000",
+        "",
+        "S/-----",
+        "S/-------",
+        "SS-AA0000",
+        "S-AA0000-",
+        "S-A0000",
+        "S-AAA0000",
+        "SM-0",
+        "M-000000-",
+        "M-",
+        "S-@A0",
+        "S-[A0",
+        "S-A@0",
+        "S-A[0",
+        "S-AA",
+        "M-000000",
+        "M-900000",
+        "M-0",
+        "M-00000",
+        "M-0000000",
+        "S-AA0000",
+        "S-ZA0000",
+        "S-AA9000",
+        "S-AZ0000",
+        "S-AA0",
+        "S-AA000",
+        "S-AA00000",
+        "S-ZA0",
+        "S-AZ0"
+      ],
+      "cases": 41
+    },
+    {
+      "kind": "adapter",
+      "file": "app/renewal/loan-catalog.adapter.ts",
+      "name": "findLoan",
+      "variants": [
+        "found",
+        "none",
+        "unavailable"
+      ],
+      "bare": [
+        "none",
+        "unavailable"
+      ],
+      "asynchronous": true,
+      "carriesData": true,
+      "rethrows": true,
+      "cases": 4
+    },
+    {
+      "kind": "classifier",
+      "input": "numbers",
+      "file": "app/renewal/loan-state.classifier.ts",
+      "name": "classifyLoan",
+      "outcomes": [
+        "onTime",
+        "dueToday",
+        "inGrace",
+        "overdue"
+      ],
+      "atoms": [
+        "today < dueOn",
+        "today <= dueOn",
+        "today <= dueOn + 7",
+        "today - dueOn > 7",
+        "today - dueOn > 0",
+        "today - dueOn === 0"
+      ],
+      "paths": 4,
+      "infeasible": 60,
+      "boundary": 2,
+      "probes": [
+        [
+          1,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          0,
+          7
+        ],
+        [
+          -8,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "cases": 6
+    },
+    {
+      "kind": "route",
+      "file": "app/renewal/renewal.handler.ts",
+      "name": "refusal",
+      "keys": [
+        "unreadableCard",
+        "malformedDay"
+      ],
+      "cases": 2
+    },
+    {
+      "kind": "route",
+      "file": "app/renewal/renewal.handler.ts",
+      "name": "lookupFailure",
+      "keys": [
+        "none",
+        "unavailable"
+      ],
+      "cases": 2
+    },
+    {
+      "kind": "route",
+      "file": "app/renewal/renewal.handler.ts",
+      "name": "renewal",
+      "keys": [
+        "onTime",
+        "dueToday",
+        "inGrace",
+        "overdue"
+      ],
+      "cases": 4
+    },
+    {
+      "kind": "handler",
+      "file": "app/renewal/renewal.handler.ts",
+      "name": "handleRenewal",
+      "guards": [
+        {
+          "subject": "isLibraryCard(req.card)",
+          "exits": [
+            "false"
+          ],
+          "statement": "if (!isLibraryCard(req.card)) return refusal.unreadableCard"
+        },
+        {
+          "subject": "isCurrentDay(req.today)",
+          "exits": [
+            "false"
+          ],
+          "statement": "if (!isCurrentDay(req.today)) return refusal.malformedDay"
+        },
+        {
+          "subject": "lookup.kind",
+          "exits": [
+            "none",
+            "unavailable"
+          ],
+          "statement": "if (lookup.kind !== 'found') return lookupFailure[lookup.kind]"
+        }
+      ],
+      "cases": 5
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "include": ["app/**/*.ts"],
+  "exclude": ["**/*.test.ts"],
+  "shapes": {
+    "decisions": "app/**/*.decision.ts",
+    "classifiers": "app/**/*.classifier.ts",
+    "adapters": "app/**/*.adapter.ts",
+    "wiring": "app/**/*.handler.ts"
+  },
+  "specs": "checks",
+  "obligations": "checks/obligations.json",
+  "cache": ".verifiable-cache/z3.json",
+  "outside": ["app/**/*.port.ts"]
+}

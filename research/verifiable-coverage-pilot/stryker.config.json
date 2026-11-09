@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "node --test 'test/*.test.ts'"
+  },
+  "mutate": ["src/**/*.ts", "!src/ports/**"],
+  "reporters": ["clear-text", "json"],
+  "jsonReporter": {
+    "fileName": "reports/mutation.json"
+  },
+  "coverageAnalysis": "off",
+  "tsconfigFile": "no-tsconfig-rewrite.json",
+  "concurrency": 4,
+  "thresholds": {
+    "high": 100,
+    "low": 100,
+    "break": null
+  }
+}

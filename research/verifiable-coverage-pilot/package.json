@@ -1,0 +1,25 @@
+{
+  "name": "verifiable-coverage-pilot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "inventory": "node tools/inventory.ts",
+    "diagnose": "node tools/diagnose.ts",
+    "test": "node --test 'test/*.test.ts'",
+    "test:tools": "node --test 'tooltest/*.test.ts'",
+    "reconcile": "node tools/reconcile.ts",
+    "mutate": "stryker run",
+    "survivors": "node tools/mutation.ts",
+    "prune": "node tools/prune.ts"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
+    "@types/node": "^26.6.6",
+    "ts6": "npm:typescript@6.0.3",
+    "typescript": "^7.0.2",
+    "vitest": "5.1.0",
+    "z3-solver": "^5.3.3"
+  }
+}
