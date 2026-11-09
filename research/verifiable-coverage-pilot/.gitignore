@@ -1,0 +1,4 @@
+.stryker-tmp/
+reports/
+.verifiable-cache/
+tooltest/.scratch-*/
