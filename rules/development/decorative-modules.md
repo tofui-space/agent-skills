@@ -19,6 +19,18 @@ The cost lands on maintainers, who inherit an interface built for an appearance,
 
 An explicit user instruction to create a module, interface, or extension point wins over this rule; the post-generation pass still runs, and its report says the module exists on instruction.
 
+## Contents
+
+- Before creating a module
+- Naming
+- Tells
+- Cheap tests
+- Requirements are met by behavior
+- The post-generation pass
+- Security-relevant modules
+- Review
+- Existing decorative modules
+
 ## Before creating a module
 
 Answer three questions before a new module is written.
