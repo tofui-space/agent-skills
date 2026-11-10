@@ -24,12 +24,14 @@ itself changes.
 Run the appropriate commands according to the scope you wish the skills/rules to apply.
 
 ```sh
-tofui-skills add a11y-writing                    # ./.claude — this project
+tofui-skills add a11y-writing                    # <repo root>/.claude — this project
 tofui-skills add --all --global                  # global config — every project
 tofui-skills add anti-vacuity --dir ../app       # ../app/.claude
-tofui-skills add --all --agent codex             # ./.codex + AGENTS.md
+tofui-skills add --all --agent codex             # <repo root>/.codex + AGENTS.md
 tofui-skills add --all --agent all --global      # both agents, global
 ```
+
+Without `--dir` or `--global`, the target is the root of the git repository around the current directory, so running the CLI from a package inside a monorepo still installs at the repository root. Outside a repository it is the current directory. To install into a package on purpose, pass `--dir .` from inside it.
 
 | Flag             | Effect                                         |
 |------------------|------------------------------------------------|
@@ -72,6 +74,38 @@ offline falls back to the last pull), keeps each entry's original copy/link mode
 files already match the catalog byte-for-byte — no version numbers involved. Local edits to a tracked entry count
 as stale and are overwritten; entries the CLI didn't install are never touched. Linked installs are already live,
 so for them `update` (or `sync` alone) is a no-op.
+
+### Using a local checkout
+
+To install skills and rules that are not pushed — work in progress, or a catalog you never intend to publish — point the CLI at a checkout with `--from`. It reads the working tree as it is on disk, so uncommitted and untracked entries are installable too, and no `sync` is needed.
+
+Run it from the root of the checkout and aim at the project with `--dir`, or at the global config with `--global`:
+
+```sh
+tofui-skills list --from .                                 # what the checkout offers
+tofui-skills add a11y-writing --from . --dir ../app        # copy into ../app/.claude
+tofui-skills add --all --link --from . --dir ../app        # symlink — edits in the checkout are live
+tofui-skills add --all --from . --global                   # into the global config
+tofui-skills update --from . --dir ../app                  # re-copy after editing the checkout
+```
+
+`--from .` can be left out there: the CLI detects the checkout it is run from and uses it ahead of the cache.
+
+The path is resolved against the current directory, so the same works from the other side — inside the project, pointing back at the checkout:
+
+```sh
+tofui-skills add a11y-writing --from ../agent-skills       # copy into ./.claude
+```
+
+Set `TOFUI_SKILLS_SOURCE` to drop the flag everywhere:
+
+```sh
+export TOFUI_SKILLS_SOURCE=~/src/agent-skills
+```
+
+The CLI picks its catalog in this order: `--from`, `TOFUI_SKILLS_SOURCE`, a checkout enclosing the current directory, the synced cache, then the copy bundled with the installed package.
+
+Keep the source consistent for `update`. Run without `--from` or the variable from another project, it pulls the cache and refreshes from that instead: entries that also exist on the remote are overwritten with the pushed version, and entries that only exist locally are reported as `gone` and left as they are.
 
 ### Disabling and removal
 

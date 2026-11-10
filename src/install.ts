@@ -35,7 +35,25 @@ export function targetRoot(
       ? path.resolve(configured)
       : path.join(os.homedir(), agent.configDir)
   }
-  return path.resolve(process.cwd(), agent.configDir)
+  return path.join(projectRoot(process.cwd()), agent.configDir)
+}
+
+/**
+ * The directory a project install belongs to: the nearest one at or above
+ * `startDir` that holds `.git`, so running from a package inside a monorepo
+ * still targets the repository root. `.git` is a file in worktrees and
+ * submodules, which count as roots of their own. Outside any repository it
+ * is `startDir` itself.
+ */
+export function projectRoot(startDir: string): string {
+  const start = path.resolve(startDir)
+  let dir = start
+  for (;;) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir
+    const parent = path.dirname(dir)
+    if (parent === dir) return start
+    dir = parent
+  }
 }
 
 /** True when this entry is written as a file rather than folded into AGENTS.md. */

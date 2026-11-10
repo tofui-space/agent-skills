@@ -10,6 +10,7 @@ import {
   inspect,
   install,
   isCurrent,
+  projectRoot,
   readManifest,
   syncAgentsFile,
   targetRoot,
@@ -41,8 +42,19 @@ describe('targetRoot', () => {
     else process.env.CLAUDE_CONFIG_DIR = original
   })
 
-  test('defaults to .claude in the working directory', () => {
-    assert.equal(targetRoot(claude), path.resolve(process.cwd(), '.claude'))
+  test('defaults to .claude at the root of the enclosing repository', () => {
+    const repo = fs.realpathSync(makeTempDir('monorepo'))
+    const pkg = path.join(repo, 'apps/web')
+    fs.mkdirSync(path.join(repo, '.git'))
+    fs.mkdirSync(pkg, { recursive: true })
+    const originalCwd = process.cwd()
+    try {
+      process.chdir(pkg)
+      assert.equal(targetRoot(claude), path.join(repo, '.claude'))
+    } finally {
+      process.chdir(originalCwd)
+      removeAll(repo)
+    }
   })
 
   test('--dir targets .claude inside the given directory', () => {
@@ -74,6 +86,44 @@ describe('targetRoot', () => {
       targetRoot(claude, { dir: '/explicit', global: true }),
       path.join('/explicit', '.claude'),
     )
+  })
+})
+
+describe('projectRoot', () => {
+  let repo: string
+
+  before(() => {
+    repo = makeTempDir('monorepo')
+    fs.mkdirSync(path.join(repo, '.git'))
+    fs.mkdirSync(path.join(repo, 'apps/web/src'), { recursive: true })
+  })
+  after(() => removeAll(repo))
+
+  test('walks up from a package to the repository root', () => {
+    assert.equal(projectRoot(path.join(repo, 'apps/web/src')), repo)
+  })
+
+  test('returns the start directory when it is the root', () => {
+    assert.equal(projectRoot(repo), repo)
+  })
+
+  test('stops at a .git file, as in a submodule or worktree', () => {
+    const sub = path.join(repo, 'packages/vendored')
+    writeFile(path.join(sub, '.git'), 'gitdir: ../../.git/modules/vendored\n')
+    fs.mkdirSync(path.join(sub, 'lib'))
+    assert.equal(projectRoot(path.join(sub, 'lib')), sub)
+  })
+
+  test('falls back to the start directory outside any repository', () => {
+    const loose = makeTempDir('loose')
+    try {
+      assert.equal(
+        projectRoot(path.join(loose, 'nested')),
+        path.join(loose, 'nested'),
+      )
+    } finally {
+      removeAll(loose)
+    }
   })
 })
 

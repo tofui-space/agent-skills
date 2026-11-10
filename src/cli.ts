@@ -692,6 +692,10 @@ ${bold('Where things land')}
   Codex has no glob-scoped rule mechanism, so a rule's \`paths:\` frontmatter
   is inlined as prose rather than enforced.
 
+  Without --dir or -g, entries land at the root of the enclosing git
+  repository, even when run from a package inside it; --dir . targets the
+  current directory instead.
+
   -g targets $CLAUDE_CONFIG_DIR / $CODEX_HOME, falling back to ~/.claude
   and ~/.codex.
 
