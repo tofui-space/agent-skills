@@ -1,0 +1,17 @@
+{
+  "skill_name": "verifiable",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/verifiable:paths src/board.ts\n\nits the function that builds the text for our bus stop boards. i want to know if the tests we need for it can even be counted before i spend time on it",
+      "expected_output": "A read-only report: no project file is changed. It gives the exits and branch points that diagnose printed for boardText, names each open branch with what it depends on (the stop text, the line number, the timetable call), mentions the catch that merges every failure into one value, and gives no invented number of tests.",
+      "files": ["evals/files/bus-stop-board/package.json", "evals/files/bus-stop-board/tsconfig.json", "evals/files/bus-stop-board/src/board.ts", "evals/files/bus-stop-board/test/board.test.ts"]
+    },
+    {
+      "id": 2,
+      "prompt": "/verifiable:coverage src/board.ts\n\nboardText is the thing that decides what a bus stop board shows. requirement as far as i know it: a stop id is two capital letters, a dash, three digits. lines run 1 to 99. if the timetable has no service for the line (it throws NoService) the board says 'no service', anything else going wrong should just blow up. a bus that is due or already there shows 'due', up to and including 60 minutes shows the minutes, more shows 'more than an hour'. go ahead and do the whole thing, the project folder is a throwaway copy already",
+      "expected_output": "The code is reshaped into the shapes with a verifiable.json, the inventory prints no REJECTED line and wrote an obligations file, one spec per unit exists and starts with the requirement, the computed checks pass through an entry file, the existing tests still pass, a reconciliation was run, only tests with the verdict skipped or cannot fail were removed and each is listed with its evidence, and the report marks lines Run or Read, says what is outside the claim, and lists the specs a person has to review. No test case was written by hand for code in the shapes.",
+      "files": ["evals/files/bus-stop-board/package.json", "evals/files/bus-stop-board/tsconfig.json", "evals/files/bus-stop-board/src/board.ts", "evals/files/bus-stop-board/test/board.test.ts"]
+    }
+  ]
+}
