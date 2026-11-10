@@ -8,6 +8,8 @@ node_modules/
 # Build output
 dist/
 *.tsbuildinfo
+__pycache__/
+*.skill
 
 # Editors and tooling
 .idea/
