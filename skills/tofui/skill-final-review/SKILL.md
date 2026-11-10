@@ -7,6 +7,22 @@ description: "Final pre-ship review of a drafted skill across six fronts: confli
 
 The last pass before a drafted skill is packaged, installed, or called done.
 
+## Contents
+
+- The failure this stops
+- When to run it
+- Setup
+- The six fronts
+  1. Conflict and logical risk — blocking
+  2. Escape hatches and missing exceptions — blocking
+  3. Noise — non-blocking
+  4. Leakage and overfit — blocking for anything personal or secret
+  5. Staleness — non-blocking, blocking when the claim is already false
+  6. Token cost — non-blocking, blocking for a description over 1,024 characters
+- Report format
+- After the report
+- Precedence
+
 ## The failure this stops
 
 The reviewer is almost always the author. Having written the draft, you know what each line was meant to do — so a hedge reads as prudence, a restatement reads as emphasis, and an example lifted from the conversation that produced the skill reads as helpful grounding. All three survive a reread, because intent supplies meaning the page does not carry. The reader who actually runs the skill is a fresh session with none of that context. They get only the page.
@@ -35,7 +51,11 @@ wc -w <path>/SKILL.md "$SKILLS"/*/SKILL.md | sort -n
 
 Resolve the directory rather than assuming `~/.claude`; a hardcoded path can still hold a stale corpus, so it returns plausible numbers instead of failing. If the glob is empty, say front 6 could not run — do not report size against nothing.
 
-Count the description separately; it is priced differently (front 6).
+Count the description separately, in words and in characters; it is priced differently and capped at 1,024 characters (front 6). Count characters as the YAML parser returns the value, since a folded `>-` block joins its lines with spaces:
+
+```bash
+python3 -c 'import sys,yaml; fm=open(sys.argv[1]).read().split("---")[1]; print(len(yaml.safe_load(fm)["description"]), "chars")' <path>/SKILL.md
+```
 
 ## The six fronts
 
@@ -91,7 +111,9 @@ The fix is rarely deletion. A version-pinned claim earns a check that confirms t
 
 Not a finding: a rule that names a model, tool or version and verifies it before acting on it.
 
-### 6. Token cost — non-blocking
+### 6. Token cost — non-blocking, blocking for a description over 1,024 characters
+
+A description over 1,024 characters is blocking: the Agent Skills specification caps it there, and a validator that enforces the cap refuses to package the skill. Report it with the character count, and give the cuts as separate findings, each with the characters it saves, so the user can pick a set that lands under the limit.
 
 Two budgets at different prices. The description loads into every conversation whether or not the skill triggers; the body loads only when it does. So the description takes the harshest cut: trigger phrases, contexts, anti-triggers, nothing else. Explanation belongs in the body.
 
@@ -117,7 +139,7 @@ Overlap is the other cost: if an installed skill already carries a rule, referen
 **FINAL REVIEW — <skill-name>**
 
 - **Verdict:** <ship | fix first> — <n> blocking, <m> non-blocking
-- **Size:** body <N>w, description <M>w (corpus median <X>w, max <Y>w)
+- **Size:** body <N>w, description <M>w and <C> of 1,024 characters (corpus median <X>w, max <Y>w)
 - **Clean:** <fronts with no findings>
 
 ### Blocking
@@ -151,7 +173,7 @@ Worked findings:
 
 ## After the report
 
-Apply exactly the IDs the user names; `all` means every finding, `none` ends the review. Then re-measure both word counts and state the new numbers in one line.
+Apply exactly the IDs the user names; `all` means every finding, `none` ends the review. Then re-measure both word counts and the description's character count, and state the new numbers in one line.
 
 One pass. A second full review of the edited draft returns wording churn rather than findings. Re-run a single front only when an applied fix added a new rule or rewrote more than a paragraph, and re-run only that front.
 
