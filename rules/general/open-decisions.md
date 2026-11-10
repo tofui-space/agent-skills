@@ -12,6 +12,19 @@ A decision put to a human is a request for a specific kind of answer.
 The reader can only supply that answer if they can see, at a glance, what kind of question it is, why it is open, what the options trade, and what happens if they do nothing.
 Analysis that arrives before those four things is noise the reader has to dig through to find the question.
 
+## Contents
+
+- First, decide whether it is a decision at all
+- Name the kind
+- The shape of one decision
+- Several decisions at once
+- In a structured question dialog
+- In a plan
+- Wording
+- Does not apply
+- Precedence
+- Example
+
 ## First, decide whether it is a decision at all
 
 Before asking, try to close it.
