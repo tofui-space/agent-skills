@@ -840,3 +840,32 @@ Next, in order (updated 2026-11-10, after the four additions):
 2. The skill, drafted through `tofui-skill-creator`, using only steps that the pilot and the field tests verified. The helpers for `/verifiable:mutation` and `/verifiable:prune` are built (see "Helpers for `:mutation` and `:prune`").
 3. The remaining shapes: bounded collections, then effect plans inside a transaction.
 4. A guarantee that depends on the input, and a faster reconciliation.
+
+## The skill as landed
+
+2026-11-10. The skill is `skills/development/verifiable/`: `SKILL.md`, four reference files, the rules text for `:init`, two entry-file templates, five thin command files, and `scripts/`, a copy of this pilot's `tools/`.
+
+**Decided by the author, not to be reopened:**
+
+- The name `verifiable` and six invocations: `/verifiable` (the assurance stance), `:paths`, `:coverage`, `:mutation`, `:prune`, `:init`. No `:review` and no `:check`.
+- No pruning by default. `:coverage` removes only tests that are skipped or cannot fail; everything else goes through `:prune` or an explicit request.
+- The model never chooses, counts or writes test cases for code in the shapes.
+- Scope is application code under logic, integration and end-to-end tests; tooling and configuration files get no shape.
+- The skill names no other skill.
+- The pilot's fixtures are generic and may be committed.
+
+**Maintaining it:**
+
+- `scripts/` is a copy. Change `tools/` here first, run the gates, then copy the files into the skill.
+- The gates: `node --test 'tooltest/*.test.ts'` (76 tests), `node --test 'test/*.test.ts'` (600 computed checks in 31 groups), `node tools/inventory.ts --check`, `./faults.sh` (43 seeded faults, 12 minutes), and the mutation run (400 of 406 killed at the last run, before the fixes that followed the skill's two test runs).
+- The skill was tried by two fresh agents on an invented project (`evals/` in the skill), once. Their 38 notes led to 12 tool fixes and to changes in the skill text; the two prompts were not rerun afterwards.
+- The final review ran once and all nine of its findings were applied. A second full review returns wording churn; re-check one topic only when an edit rewrites more than a paragraph.
+- The five command files were copied by hand into the agent's commands folder; the catalog's installer installs skills and rules only. Of the five, only `paths` was invoked through its command file.
+
+**Open:**
+
+1. Installer support for command files, and the same for Codex (not checked).
+2. Shapes: bounded collections, effects inside a transaction, the product of two inputs, text other than digits.
+3. A guarantee that depends on the input.
+4. A faster reconciliation for a suite whose every test file builds the application.
+5. Reading a per-test kill matrix in the prune helper; a mutation report of Stryker.NET; a Jest runner.
