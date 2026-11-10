@@ -5,6 +5,21 @@
 > self-report · [C] consensus · [O] opinion · (contested). Coverage in ../knowledge-map.json.
 > NOTE: altitude is a TAG here, not a silo — cross-altitude rules live once.
 
+## Contents
+
+- Duplication vs. abstraction (DRY) [code/design] {cognitive load}
+- Comments vs. self-documenting code [code] {cognitive load}
+- Function length / complexity metrics [code] {cognitive load}
+- Coupling: structural vs. logical/co-change [code/architecture] {cognitive load}
+- Naming / identifiers [code] {cognitive load}
+- Conventions / consistency [code/all] {cognitive load}
+- API / interface design [API] {cognitive load, feedback loops}
+- Make illegal states unrepresentable / parse, don't validate [API/code] {cognitive load} (ALIGNMENT)
+- Architecture: microservices vs. monolith vs. modular monolith [architecture] {all}
+- Module boundaries / Conway / Team Topologies [architecture] {cognitive load}
+- Documentation: Diátaxis + ADRs [documentation] {cognitive load}
+- Tooling / dev loop / platform [tooling] {feedback loops, flow}
+
 ## Duplication vs. abstraction (DRY)  [code/design] {cognitive load}
 - **Rule:** prefer duplication when the pattern is volatile or not-yet-understood; prefer abstraction when
   the logic is stable, high-churn, and genuinely shared. The wrong abstraction costs more than duplication —
