@@ -21,6 +21,13 @@ available or should be proposed. Read `references/report-template.md` when produ
 Never commit. Never delete tests without an explicit go from the user. Never edit a failing test to
 make it pass; report the failure.
 
+## Contents
+
+- Taxonomy
+- Generation rules
+- Review procedure
+- When the user is tired or imprecise
+
 ## Taxonomy
 
 Seven failure modes. Each generated test that a careful human would not have written falls into one.
