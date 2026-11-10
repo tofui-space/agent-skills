@@ -1,23 +1,42 @@
 ---
 name: sort-into-virtual-branches
-description: "Sort a working tree holding several unrelated pieces of work, or one oversized commit, into GitButler virtual branches — one branch per scope, committing hunk by hunk, leaving anything unplaceable uncommitted and reported. Use when the user says 'sort these changes', 'split this into branches', 'fan these out', 'organise the working tree', 'split this commit', 'these belong on different branches', or asks for a messy `but status` / `but diff` to become reviewable branches. Also use before committing when one working tree clearly holds several unrelated pieces of work. Do NOT use for resolving conflicts, for a single-scope change that needs one ordinary commit, for reordering or rewriting existing history, or in a repository that is not a GitButler workspace."
+description: "Sort a working tree holding several unrelated pieces of work, or one oversized commit, into GitButler virtual branches — one branch per scope, committing hunk by hunk, leaving anything unplaceable uncommitted and reported. Use when the user says 'sort these changes', 'split this into branches', 'fan these out', 'organise the working tree', 'split this commit', 'these belong on different branches', or asks for a messy `but status` / `but diff` to become reviewable branches. Also use before committing when one working tree clearly holds several unrelated pieces of work. Do NOT use for resolving conflicts, for a single-scope change that needs one ordinary commit, for reordering or rewriting existing history, or when the GitButler workspace branch `gitbutler/workspace` is not checked out."
 ---
 
 # Sort changes into virtual branches
 
 Every line below is a single statement. `[probe]` marks behaviour observed by running the command
-against GitButler 0.22.3. `[source]` marks behaviour read from the CLI source at that version.
-`[decision]` marks a choice made for this skill, not a property of the tool. `[unverified]` marks a
-statement nobody has tested — treat those as the thin ice they are.
+against GitButler 0.22.3; the probes have not been repeated on 0.23.2. `[source]` marks behaviour
+read from the CLI source at 0.23.2. `[run]` marks output observed from a read-only command on
+0.23.2. `[decision]` marks a choice made for this skill, not a property of the tool. `[unverified]`
+marks a statement nobody has tested — treat those as the thin ice they are.
 
 Prefix every `but` command with `NO_BG_TASKS=1`, which suppresses a background fetch of every remote
 plus forge and update queries. `[source]`
+
+## Contents
+
+- P — preconditions
+- F — tool facts
+- A — assignment
+- S — procedure
+- E — error handling
+- Splitting one oversized commit
+- U — untested
+- Recovery
 
 ## P — preconditions
 
 Check all of these before the first command. If any fails, stop and report which one.
 
-* **P1** `NO_BG_TASKS=1 but status` exits 0. Otherwise the repository is not a GitButler workspace.
+* **P1** `git rev-parse --abbrev-ref HEAD` prints `gitbutler/workspace`. Check this with git, before
+  any `but` command: in a repository GitButler has not opened, `but status` itself registers the
+  project and writes a target to the local git config. `[source]` Any other branch means
+  single-branch mode, where creating a second branch switches `HEAD` to the workspace (U4).
+* **P1a** `git rev-parse --git-dir` and `git rev-parse --git-common-dir` print the same path, so the
+  current directory is the main worktree. From a linked worktree, `but diff` and `but commit` act on
+  that worktree's changes, and `but commit -b` with a new branch name is refused while that worktree
+  has a branch checked out. `[source]`
 * **P2** `but status` shows no commit marked conflicted.
 * **P3** No branch holding work to sort is marked merged upstream. Mutations are refused on those. `[source]`
 * **P4** The work to sort is not pushed. A push cannot be withdrawn.
@@ -30,9 +49,11 @@ Check all of these before the first command. If any fails, stop and report which
 ## F — tool facts
 
 * **F1** The smallest unit that can be committed is a hunk. There is no line-level selector. `[probe]`
-* **F2** `but diff` prints one box per hunk, headed `<file-id>:<hunk-id> <path>`. `[probe]`
+* **F2** `but diff` prints one box per hunk, headed `<file-id>:<hunk-id> <status> <path>`, where
+  the status is a letter such as `M`. `[run]`
 * **F3** A hunk ID read from one `but diff` still resolves after other hunks have been committed,
-  even when the displayed short ID has since shortened. `[probe]` Exception: two hunks in one file
+  even when the displayed short ID has since shortened. `[probe]` The ID is still a hash of the
+  hunk's lines without its `@@` header. `[source]` Exception: two hunks in one file
   with identical diffs get IDs suffixed `#<index>-<count>`, such as `ab:0#0-2` and `ab:0#1-2`.
   Once one of them is committed, the other loses its suffix and the saved suffixed ID no longer
   resolves. `[source]`
@@ -41,17 +62,20 @@ Check all of these before the first command. If any fails, stop and report which
 * **F5** Two hunks of one file can be committed to two branches that are not stacked. `[probe]`
 * **F6** IDs are separated by spaces. A comma is part of an ID, not a separator: `ab,cd` resolves as
   one ID and fails. `[source]`
-* **F7** `but commit -b <branch> -m "<msg>"` with no IDs commits every uncommitted change in the main
-  worktree. `[source]`
+* **F7** `but commit -b <branch> -m "<msg>"` with no IDs commits every uncommitted change in the
+  checkout `but` runs in. `[source]`
 * **F8** A refused commit creates nothing: no commit, no branch. `[probe]`
 * **F9** A refusal takes one of two forms. `[probe]`
   * `line <n> depends on <branch> (<commit>)` — the hunk edits a line that branch introduced.
   * `conflicts with commits on <branch> (edits touch the same file)` — the hunk overlaps a hunk
     that branch already committed.
+
+  Both message texts are unchanged in the 0.23.2 source. `[source]`
 * **F10** After either refusal, `but branch new <branch> --above <named-branch>` followed by the
-  identical commit command succeeds. `[probe]`
-* **F11** `--anchor` is accepted, prints a deprecation warning, and is replaced by `--above`. GitButler's
-  own refusal hint still suggests `--anchor`. `[probe]`
+  identical commit command succeeds. `[probe]` 0.23 also accepts the one-command form
+  `but commit --above <named-branch> -b <branch>`; it has never been run for this skill. `[source]`
+* **F11** `--anchor` was removed in 0.23.0 and now fails with an error naming `--above`. The refusal
+  hint in F9 suggests `--above`. `[source]`
 * **F12** Committing to the branch that owns the lines always succeeds, however many times. `[probe]`
 * **F13** `but oplog snapshot -m "<label>"` prints `Snapshot ID: <sha>`. `[probe]`
 * **F14** `but uncommit <commit-id> && but diff` is safe as one call: `but diff` needs no ID from the
@@ -88,7 +112,8 @@ branch nobody reviews for it.
   each commit and match the planned hunks by path and changed lines.
 * **S3** Apply section A to every hunk. Produce two lists: assigned hunks per scope, and unassigned
   hunks.
-* **S3a** `NO_BG_TASKS=1 but branch list -a`. A scope's branch name must not appear in the output.
+* **S3a** `NO_BG_TASKS=1 but branch list -a --empty`. A scope's branch name must not appear in the
+  output. Without `--empty`, branches with no commits are left out of the list. `[source]`
   `-b <name>` on an existing applied branch adds the commit on top of that branch's history, and
   on an existing unapplied branch it fails. `[source]` If a name is taken, choose another and say so
   in S8.
@@ -135,10 +160,14 @@ The commit's changes become uncommitted (F14). Continue from S2.
   branches (F5); two edits inside one hunk were refused with a message that says "file".
 * **U3** Whether a scope refused once can be committed at all without stacking, for example after
   the user reorders the scopes.
+* **U4** Sorting in single-branch mode. From the source, the first `but commit -b` there checks the
+  new branch out when the target branch is checked out, and a second one switches `HEAD` to
+  `gitbutler/workspace` with both branches applied; none of this has been run. `[source]`
 
 Do not write around these. If one is reached, stop and report which.
 
 ## Recovery
 
 Read `references/recovering.md` before undoing anything: before restoring a snapshot, when a commit
-landed on the wrong branch, or when a branch has vanished from the workspace.
+landed on the wrong branch, or when a branch has vanished from the workspace. Its observations come
+from 0.22.3, and 0.23 rewrote the restore code, so hand every restore to the user with that caveat.
