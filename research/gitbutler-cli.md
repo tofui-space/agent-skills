@@ -9,6 +9,44 @@
 
 In this file, **Source:** marks what the code or docs say, and **Inference:** marks reasoning that goes beyond them.
 
+Everything after the next section describes 0.22.3. The next section records what changed in 0.23.2 and which rule and skill statements it moved.
+
+## 0.23.2 re-verification (2026-11-06)
+
+| | |
+|---|---|
+| Installed `but` | **0.23.2**, from the bundle's `Info.plist` (`CFBundleShortVersionString = 0.23.2`); the binary's strings contain `0.23.2`. `but --version` was again blocked by the VCS-write hook. |
+| Source | Tag `release/0.23.2`, commit `bfbdb6f7def65897d2b665e28bd1b63bd7def285`, compared against `release/0.22.3` from GitHub tarballs. Paths in this section are at 0.23.2 under `crates/but/src/` unless they name another crate. |
+| Release notes | GitHub releases `release/0.23.0`, `0.23.1`, `0.23.2`. Used to find what to read, never as evidence on their own. |
+| Run | `NO_BG_TASKS=1 but diff` in this repository (read-only), to see the hunk header format. Nothing that writes was run, and none of the 0.22.3 probes was repeated. |
+
+**Breaking changes that moved a statement**
+
+| Change | Source | Moved |
+|---|---|---|
+| The uncommitted area is `@`. `zz` is rejected with an error asking for `@`. | `id/mod.rs:51, 58, 1282-1287` | Rule, reading output |
+| `but land` is `but merge`, with `land` as a hidden alias. With an upstream it pushes and deletes the merged branch's remote copy; without one it moves local refs. | `args/mod.rs:383`; `command/legacy/merge/messaging.rs:44-50` | Rule, Never run |
+| `but setup` is hidden and only prints a notice; `but init` creates a repository. | `args/mod.rs:188, 630`; `lib.rs:685-693`; `args/init.rs` | Rule, Never run |
+| `but open` is removed; `but gui` (alias `.`) opens the app. `open --print` has no replacement. | `args/mod.rs` diff; `Gui` variant | Rule, Allowed |
+| `but review` alias removed; `but mr` remains. | `args/mod.rs:523` | Rule, Never run |
+| `but branch new --anchor` removed; a retired-syntax hint names `--above`, nothing runs. The commit refusal hint now prints `--above`. | `retired_syntax.rs:418-425`; `utils/rejection.rs` diff | Skill F11 |
+| ID ranges such as `g0-h2` removed. Commas still split in `but absorb` and `but pr` selectors. | `id/parser.rs:40-48, 73-74` | none |
+| New writes: `but split`, `but worktree new` (alias `add`), `but agent uninstall`, `but pull --update`, hidden `but switch` (alias `sw`). New alias `b` → `branch`. | `args/split.rs`; `args/worktree.rs`; `args/agent.rs`; `args/mod.rs:508`; `alias.rs:13-22` | Rule, Never run and aliases |
+| Committed hunks have IDs `<commit>:<file>:<hunk>`, shown by `but diff <commit>`; `discard`, `squash`, `move`, `uncommit`, `split` accept them. | `args/mod.rs:144-145`; `args/diff.rs` | Rule, reading output |
+| `but` works in any repository. Single-branch mode is no longer a feature flag: every command that opens the project registers it in the global project list, and, unless the target is optional for that command, infers a target and writes it to local git config with `log.excludeDecoration` and an upstream. `status`, `diff`, `commit` skip inference only in an unborn repository. | `setup.rs:142-170, 256-283`; `crates/but-workspace/src/init.rs:176-200` | Rule, side effects and Ask first; skill P1 |
+| Every command run inside an archived linked worktree unarchives it. | `setup.rs:194, 232-255` | Rule, side effects |
+| In single-branch mode, creating an independent branch (by `commit -b` or `branch new`) either checks the new branch out (target checked out) or sets up `gitbutler/workspace` with the current branch applied. | `crates/but-transaction/src/single_branch_mode.rs:104-160, 249-283`; `command/legacy/branch/new.rs:192-235` | Rule, Additive exceptions; skill P1, U4 |
+| `but commit` and `but diff` act on the checkout `but` runs in. From a linked worktree with a branch checked out, `commit -b <new>` is refused. | `args/commit.rs` doc; `command/legacy/commit.rs:305-318` | Skill F7, P1a |
+| `but discard` in a linked worktree is not snapshotted, so `but undo` cannot reverse it. | `command/legacy/discard.rs:619-620` | Rule, Never run; recovering.md |
+| A non-interactive `but push` with no branch pushes every stack with unpushed commits; `--with-force` is hidden and always on. | `args/push.rs:4-10` | Rule, Never run |
+| `but branch list` hides branches with no commits unless `--empty` is passed; this was already true in 0.22.3. | `command/legacy/branch/list.rs:52-75, 148` | Skill S3a (latent defect, fixed) |
+| The snapshot restore was rewritten (772 diff lines in `gitbutler-oplog/src/oplog.rs`). Snapshots of branch-creating operations record the new ref so undo deletes it, and a restore can change the checkout. | `crates/but-oplog/src/lib.rs:100-140`; `gitbutler-oplog/src/oplog.rs:1292-1500` | recovering.md caveat |
+| `but diff` hunk boxes are headed `<file-id>:<hunk-id> <status> <path>`, for example `rlnq:a404 M README.md`. | Run | Skill F2 |
+
+**Unchanged, re-read at 0.23.2.** Background sync conditions and `NO_BG_TASKS` (`setup.rs:201-226`; dispatch in `lib.rs:844-925`); `--json` still suppresses it. Agent detection variables (`crates/but-utils/src/detect_agent.rs:20-27, 233-242`); silent skill overwrite and instruction-file cleanup (`command/skill/freshness.rs:61-97`; `command/agent/cleanup.rs:39-66`); `CLAUDE_CONFIG_DIR` is still never read. Hunk ID hashing and the `#<index>-<count>` collision suffix (`id/mod.rs`, `assign_content_based_hunk_ids`). Refusal texts `conflicts with commits on … (edits touch the same file)` and `… depends on … (…)` (`utils/rejection.rs:258, 270`). `Snapshot ID:` output (`command/legacy/oplog.rs:362`) and `oplog restore` with no prompt. `branch list --review` and `branch show --review` read the forge cache only (`list.rs:34`, `show.rs:46`); `--check` is an in-memory merge. `status -r` queries the forge (`status/mod.rs:570`). `pull --check` and `push --dry-run` fetch first, `pull --check` only when the target has an upstream (`pull/mod.rs:149-157`; `push.rs:186`). `Uncommitted files would be overwritten by checkout` (`crates/but-core/src/worktree/checkout/function.rs:160`).
+
+**Not re-established.** Every live probe below ran on 0.22.3. The dependency refusals, path selectors, ID lifetime across commits, and everything in `recovering.md` need the probe scripts re-run on 0.23.2 by a person, since they write.
+
 ## Summary
 
 | # | Claim | Verdict | Primary citation |
