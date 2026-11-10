@@ -4,6 +4,14 @@
 > tradeoffs.md (soft); constraints.md GATES (hard). Use to adjust which way a rule resolves. Tags [E]/[C]/[O].
 > Coverage in ../knowledge-map.json.
 
+## Contents
+
+- The axes (each flips rules)
+- How a modifier is applied
+- Language rows
+- Framework rows
+- Regulated / safety-critical row
+
 ## The axes (each flips rules)
 - **Language / framework idiom** — idiom fit dominates conventions and the parse-don't-validate break-axis.
   Per-language and per-framework rows below.

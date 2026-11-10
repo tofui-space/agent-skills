@@ -1,0 +1,10 @@
+{
+  "name": "verifiable-tools",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "dependencies": {
+    "ts6": "npm:typescript@6.0.3",
+    "z3-solver": "5.3.3"
+  }
+}

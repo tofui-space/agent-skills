@@ -1,0 +1,18 @@
+{
+  "source": "TASKS.example.md",
+  "sourceLabel": "TASKS.md",
+  "out": "crumb-tasks.html",
+  "title": "Crumb tasks",
+  "eyebrow": "Bakery pre-orders",
+  "person": "Alex",
+  "timeZone": "Europe/Berlin",
+  "locale": "en-GB",
+  "fonts": {
+    "body": { "family": "'Source Sans 3'", "google": "Source+Sans+3:wght@400;600" },
+    "display": { "family": "'Fraunces'", "google": "Fraunces:wght@600" }
+  },
+  "palette": {
+    "light": { "accent": "#8a3b12", "ground": "#fffaf3" },
+    "dark": { "accent": "#f0b48a", "ground": "#1a1714" }
+  }
+}

@@ -5,6 +5,17 @@ description: "Detect semantically empty text - word soup that is grammatically w
 
 # Sense Check
 
+## Contents
+
+- The failure this skill exists to stop
+- The meaning tests
+- Calibration: what is NOT gibberish
+- Input direction: reading text
+- Output direction: reviewing generated text
+- When a flag is overturned
+- Report format
+- Worked example
+
 ## The failure this skill exists to stop
 
 Language models are strong charitable interpreters. Given text with no recoverable meaning, the default behavior is to invent a plausible meaning, proceed as if the author intended it, and produce output — because producing something feels like success and reporting "this doesn't parse semantically" feels like failure. The same bias applies to a model's own output: fluent text gets generated whether or not there is a proposition underneath it, and transformations (summarize, rewrite, "make this professional") can silently drop the meaning while keeping the fluency.

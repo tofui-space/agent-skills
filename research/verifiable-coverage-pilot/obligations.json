@@ -1,0 +1,1364 @@
+{
+  "partition": "code+spec",
+  "obligations": [
+    {
+      "kind": "contract",
+      "file": "spec/contracts/node@24.ts",
+      "name": "node@24",
+      "clauses": [
+        {
+          "member": "JSON.parse",
+          "kind": "throws",
+          "text": "the text is not JSON"
+        },
+        {
+          "member": "JSON.parse",
+          "kind": "ensures",
+          "text": "an array in the text comes back as an array with the same elements"
+        },
+        {
+          "member": "JSON.parse",
+          "kind": "ensures",
+          "text": "a number too large for a double comes back as Infinity, not as an error"
+        },
+        {
+          "member": "parseArgs",
+          "kind": "throws",
+          "text": "a word names an option that is not declared, and strict is on"
+        },
+        {
+          "member": "parseArgs",
+          "kind": "throws",
+          "text": "a word is no option, and allowPositionals is off"
+        },
+        {
+          "member": "parseArgs",
+          "kind": "throws",
+          "text": "an option that takes a value has none, or a switch is given one"
+        },
+        {
+          "member": "parseArgs",
+          "kind": "ensures",
+          "text": "an option that is not given is absent from the values"
+        },
+        {
+          "member": "parseArgs",
+          "kind": "ensures",
+          "text": "the values come back as an object",
+          "scope": "the result at values is an object"
+        }
+      ],
+      "cases": 8
+    },
+    {
+      "kind": "adapter",
+      "file": "src/adapters/desk-command.ts",
+      "name": "readDeskCommand",
+      "variants": [
+        "command",
+        "undeclaredOption",
+        "strayWord",
+        "misfitValue"
+      ],
+      "bare": [
+        "undeclaredOption",
+        "strayWord",
+        "misfitValue"
+      ],
+      "asynchronous": false,
+      "carriesData": true,
+      "rethrows": true,
+      "cases": 5
+    },
+    {
+      "kind": "adapter",
+      "file": "src/adapters/hold-shelf.ts",
+      "name": "findHold",
+      "variants": [
+        "held",
+        "free"
+      ],
+      "bare": [
+        "free"
+      ],
+      "asynchronous": true,
+      "carriesData": true,
+      "rethrows": true,
+      "cases": 3
+    },
+    {
+      "kind": "adapter",
+      "file": "src/adapters/loan-catalog.ts",
+      "name": "findLoan",
+      "variants": [
+        "found",
+        "none",
+        "unavailable"
+      ],
+      "bare": [
+        "none",
+        "unavailable"
+      ],
+      "asynchronous": true,
+      "carriesData": true,
+      "rethrows": true,
+      "cases": 4
+    },
+    {
+      "kind": "adapter",
+      "file": "src/adapters/provider-store.ts",
+      "name": "writeProvider",
+      "variants": [
+        "unavailable",
+        "written",
+        "conflict"
+      ],
+      "bare": [
+        "unavailable",
+        "written",
+        "conflict"
+      ],
+      "asynchronous": true,
+      "carriesData": false,
+      "rethrows": true,
+      "cases": 4
+    },
+    {
+      "kind": "adapter",
+      "file": "src/adapters/shelf-list.ts",
+      "name": "readShelfList",
+      "variants": [
+        "read",
+        "malformed"
+      ],
+      "bare": [
+        "malformed"
+      ],
+      "asynchronous": false,
+      "carriesData": true,
+      "rethrows": true,
+      "cases": 3
+    },
+    {
+      "kind": "classifier",
+      "input": "number",
+      "file": "src/classifiers/account-state.ts",
+      "name": "classifyAccount",
+      "outcomes": [
+        "active",
+        "suspended"
+      ],
+      "comparisons": [
+        {
+          "op": "<",
+          "constant": 0
+        },
+        {
+          "op": ">=",
+          "constant": 5
+        }
+      ],
+      "intervals": [
+        {
+          "min": null,
+          "max": -1
+        },
+        {
+          "min": 0,
+          "max": 4
+        },
+        {
+          "min": 5,
+          "max": null
+        }
+      ],
+      "probes": [
+        -1,
+        0,
+        5
+      ],
+      "cases": 3
+    },
+    {
+      "kind": "classifier",
+      "input": "string",
+      "file": "src/classifiers/credential-kind.ts",
+      "name": "classifyCredential",
+      "outcomes": [
+        "jwt",
+        "session"
+      ],
+      "atoms": [
+        "header.startsWith('Bearer ')",
+        "token.includes('\\n')",
+        "token.includes('\\r')",
+        "token.includes('\\u2028')",
+        "token.includes('\\u2029')",
+        "token.split('.').length === 3",
+        "/^Bearer .+$/.test(header)"
+      ],
+      "paths": 8,
+      "infeasible": 63,
+      "boundary": 129,
+      "probes": [
+        null,
+        " ",
+        "BearerB.",
+        "Bearexa...raea",
+        "BBearer e",
+        "Bearer ",
+        "Bearerx\n",
+        "BeareB\n.\n",
+        "Bearerr\n...",
+        "Bearer\n\nBearer  ",
+        "Bearer \n",
+        "Bearer \n.",
+        "Bearer ...   \n",
+        "Bearer \nBearer B.",
+        "Bearerx\r",
+        "Bearera.\r",
+        "Bearera\r...",
+        "B.\r\n xr\rBearer x",
+        "Bearer \r",
+        "Bearer \r.",
+        "Bearer ...   \r",
+        "Bearer \r\rBearer  ",
+        "Bearera\n\r",
+        "Bearer \n\r.",
+        "Beare\n \n.\r..",
+        "Bearxr \r\nBearer B",
+        "Bearer \n\r",
+        "Bearer Ba\nr\r.",
+        "Bearer x\r\n...",
+        "Bearer \r\nBearer r ",
+        "Bearerr ",
+        "Bearer. .",
+        "Bearer. ...",
+        "Bear\n a Bearer  ",
+        "Bearer  ",
+        "Bearer . ",
+        "Bearer  ...   ",
+        "Bearer  Bearer aBxx. ",
+        "B\n\n . .\n ",
+        "B xxee\n.\ne  Bx",
+        "Bearere\n ...",
+        "Bear   \n Bearer .",
+        "Bearer \n ",
+        "Bearer  \n.",
+        "Bearer  ...  \n",
+        "Bearer \n Bearer .",
+        "Bearer . ..  \n",
+        "Bearerr \r",
+        "Bearer  \r.",
+        "B  \n r\n.. .r \r",
+        "Bearere\r Bearer .",
+        "Bearer \r ",
+        "Bearer .x\r  \r",
+        "Bearer  ...  \r",
+        "Bearer \r Bearer B.xBa",
+        "Bearera\n rax\re",
+        "Bearere .\n\r",
+        "Bearerr\nx..\r. ",
+        "Beare\n.\n\r\n \n Bearer  .x ",
+        "Bearer \nx .\r",
+        "Bearer \r.\n. .",
+        "Bearer \n  \r BBearer .",
+        "Bearer ea\n \r",
+        "Bearera ",
+        "Bearerr. ",
+        "Bearer  . .a .",
+        "BBe  x\r Bearer r",
+        "Bearer  ",
+        "Bearer ar .",
+        "Bearer  ...   ",
+        "Bearer    Bearer e",
+        "Bearerx \n",
+        "Ba\nx .  .\n",
+        "Bearerx..r\n .",
+        "Be  .\n  \nBearer B",
+        "Bearer  \n",
+        "Bearer .B\n \ne",
+        "Bearer  ...  \n",
+        "Bearer \n \n  Bearer a",
+        "x a x x\r ",
+        "Beare\rB \r.",
+        "Bearer \r... ",
+        "Bearera \rBearer r",
+        "Bearer \r ",
+        "Bearer r\r .",
+        "Bearer  ...  \r",
+        "Bearer \r Bearer  ",
+        "BearerB\n\r ",
+        "Bearer.\r\n .",
+        "B.  \rrx\n. ..\r",
+        "Bearer \n ea  e.e\r Bearer x",
+        "Bearer \n r\r\n.",
+        "Bearer \n.. .\r",
+        "Bearer \r\n Bearer  ",
+        "Bearer  a\rr \n",
+        "Bearerr  ",
+        ". \n  \r\r xxa.r ",
+        "Bearerr ..eB. ",
+        "Beare    Bearer x",
+        "Bearer   ",
+        "Bearer  .  x ",
+        "Bearer   ...  ",
+        "Bearer   Bearer xea B",
+        "Bearer Bx  ",
+        "x  r  r\n  ",
+        "Beare\na\n  .",
+        "B ea   \n  ...",
+        "Bearer \n   Bearer .a ",
+        "Bearer x.  a\n",
+        "Bearer . .\n. ",
+        "Bearer  \n\ne Bearer  ",
+        "Bearer.\r  ",
+        "Bearere.\r  ",
+        "Bearr  ..\r .B ",
+        " \n \rx\ra  \rBearer B",
+        "Bearer \r  ",
+        "Bearer   .   \r",
+        "Bearer . \r ..",
+        "Bearer \rB xB Bearer .",
+        "BearereB  \r\n.",
+        ".e r  .\n ... \r",
+        "\rBea\r\r \r \ne rBearer a.a",
+        "Bearer \n\r  ",
+        "Bearer . \n\r ",
+        "Bearer ..\r. \n ",
+        "Bearer  \r\n Bearer e",
+        "Bearer\n..",
+        "BeeBearer ..Bx",
+        "Brxrxre\n..",
+        "Bearer\r\nBearer ..",
+        "Bearer ..aBx\n",
+        "Bearer \nr.a\nBearer .B",
+        "Bearer  ..\r x ",
+        "BB.\na a\rBearer ..",
+        "Bearer xr\r..\r",
+        "Bearer \rB\r.Bearer .",
+        "Bear \rx\n\r..",
+        "Bear\r  B.\r\n.Bearer rB er",
+        "Bearer \r\n\r..x",
+        "Bearer BB\n\rBearer r..",
+        "Bearerx ..",
+        "Bearerr Bearer ..",
+        "Bearer x Bx..",
+        "Bearer . Bearer .",
+        "Bearaa \n ..",
+        "BeaxBea\nex . e  x.Bearer B",
+        "Bearer  ..   \n",
+        "Bearer B \n. .Bearer B",
+        "Bearex \r. .",
+        "Bearerar  \rBearer ..",
+        "Bearer  ..   \r",
+        "Bearer \r Bearer  ..",
+        "Bearer . .   \r",
+        "Bearer ..\n\r ",
+        "Bearer exx B.B\n\rBearer x.",
+        "Bearer \n.\re. ",
+        "Bearer \n\rB Bearer .e.",
+        "Bearer   ..\r\n",
+        "Bearr a ra.B.",
+        "Ber.x   Bearer ..",
+        "Bearer  B.  .",
+        "Bearer r.B. BBearer  ",
+        "Bra\r. \n\n.. ",
+        "Bearer\r\n Bearer a.r a.",
+        "Bearer  ..   \n",
+        "Bearer B\n Bearer B..",
+        "Beare\ra\r.. ",
+        "B     B.\r xe.Bearer     ",
+        "Bearer  ..   \r",
+        "Bearer . \rBearer .",
+        "rBBaBe\r\n B..\n\r",
+        "B\rearar..\r \r\n xBBearer r",
+        "Bearer ..a\n \r",
+        "Bearer  \n.\rBearer .x",
+        "\r xr aB . .",
+        "Bearer\n Bxx  .Brx.Bearer B",
+        "Bearer   ..   ",
+        "Bearer   B.Bearer .BB",
+        "Bearer .  .   ",
+        "e a \r a\n. a . ",
+        "Bearex.\n ae  x.\nBearer   .",
+        "Bearer   ..  \n",
+        "Bearer  \n. Bearer .",
+        "Bearer .\n. \n ",
+        "Beare\re\r ..e ",
+        "Bearer  .\r Bearer .",
+        "Bearer   ..  \r",
+        "Bearer .\rr  .Bearer  ",
+        " \n    e\n .. \r",
+        "Bear\n.   \r xa. \n\rBearer .",
+        "Bearer ..  \r\n",
+        "Bearer \n   .\rBearer .",
+        "Bearer .",
+        "Bearer ...    ",
+        "Bearer .."
+      ],
+      "cases": 195
+    },
+    {
+      "kind": "classifier",
+      "input": "unknown",
+      "file": "src/classifiers/current-day.ts",
+      "name": "isCurrentDay",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "Number.isSafeInteger(input)",
+        "typeof input === 'number'"
+      ],
+      "paths": 2,
+      "probes": [
+        "undefined",
+        "not a number",
+        "safe integer"
+      ],
+      "cases": 3
+    },
+    {
+      "kind": "classifier",
+      "input": "string",
+      "file": "src/classifiers/desk-passphrase.ts",
+      "name": "isDeskPassphrase",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "/^(?=.*[0-9])(?=.*[a-z])(?!.*\\s).{8,}$/.test(text)",
+        "text.length < 8",
+        "/\\s/.test(text)",
+        "/[0-9]/.test(text)",
+        "/[a-z]/.test(text)"
+      ],
+      "paths": 2,
+      "infeasible": 16,
+      "boundary": 63,
+      "probes": [
+        "!!!!!!!!",
+        "!!!!!!!!!",
+        "/!!!!!!!",
+        ":!!!!!!!",
+        "`!!!!!!!",
+        "{!!!!!!!",
+        "",
+        "!!!!!!!",
+        "/",
+        ":",
+        "`",
+        "{",
+        "!!!!!!!\n",
+        "!!!!!!!!\n",
+        "/!!!!!!\n",
+        ":!!!!!!\n",
+        "`!!!!!!\n",
+        "{!!!!!!\n",
+        "!!!!!!\n",
+        "/!!!!!\n",
+        ":!!!!!\n",
+        "`!!!!!\n",
+        "{!!!!!\n",
+        "0!!!!!!!",
+        "0!!!!!!!!",
+        "`0!!!!!!",
+        "{0!!!!!!",
+        "9!!!!!!!",
+        "0",
+        "0!!!!!!",
+        "9",
+        "`0",
+        "{0",
+        "0!!!!!!\n",
+        "0!!!!!!!\n",
+        "9!!!!!!\n",
+        "`0!!!!!\n",
+        "{0!!!!!\n",
+        "0!!!!!\n",
+        "9!!!!!\n",
+        "`!!!!\n0",
+        "{!!!!\n0",
+        "a!!!!!!!",
+        "a!!!!!!!!",
+        "a/!!!!!!",
+        "a:!!!!!!",
+        "z!!!!!!!",
+        "a",
+        "a!!!!!!",
+        "a/",
+        "a:",
+        "z",
+        "a!!!!!!\n",
+        "a!!!!!!!\n",
+        "a/!!!!!\n",
+        "a:!!!!!\n",
+        "z!!!!!!\n",
+        "a!!!!!\n",
+        "a/!!!!\n",
+        "a:!!!!\n",
+        "z!!!!!\n",
+        "a0!!!!!!",
+        "a0!!!!!!!",
+        "0a!!!!!!",
+        "a9!!!!!!",
+        "z0!!!!!!",
+        "a0",
+        "a0!!!!!",
+        "a9",
+        "z0",
+        "a0!!!!!\n",
+        "a!!!!!!\n0",
+        "a0!!!!!\na0!!!!!!",
+        "\ta0!!!!!",
+        "a9!!!!!\n",
+        "z!!!!!!\n0",
+        "a0!!!!\n",
+        "a9!!!!\n",
+        "z0!!!!\n"
+      ],
+      "cases": 79
+    },
+    {
+      "kind": "classifier",
+      "input": "unknown",
+      "file": "src/classifiers/hold-request.ts",
+      "name": "isHoldRequest",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "typeof input === 'object'",
+        "input === null",
+        "'kind' in input",
+        "input.kind === \"hold\"",
+        "'book' in input",
+        "typeof input.book === 'object'",
+        "input.book === null",
+        "'copy' in input.book",
+        "Number.isSafeInteger(input.book.copy)",
+        "typeof input.book.copy === 'number'"
+      ],
+      "paths": 10,
+      "probes": [
+        "undefined",
+        "null",
+        "array",
+        {
+          "book": "absent",
+          "kind": "undefined"
+        },
+        {
+          "book": "absent",
+          "kind": [
+            "literal",
+            "hold"
+          ]
+        },
+        {
+          "book": "undefined",
+          "kind": "absent"
+        },
+        {
+          "book": "undefined",
+          "kind": "undefined"
+        },
+        {
+          "book": "undefined",
+          "kind": [
+            "literal",
+            "hold"
+          ]
+        },
+        {
+          "book": "null",
+          "kind": "absent"
+        },
+        {
+          "book": "null",
+          "kind": "undefined"
+        },
+        {
+          "book": "null",
+          "kind": [
+            "literal",
+            "hold"
+          ]
+        },
+        {
+          "book": "array",
+          "kind": "absent"
+        },
+        {
+          "book": "array",
+          "kind": "undefined"
+        },
+        {
+          "book": "array",
+          "kind": [
+            "literal",
+            "hold"
+          ]
+        },
+        {
+          "book": {
+            "copy": "undefined"
+          },
+          "kind": "absent"
+        },
+        {
+          "book": {
+            "copy": "undefined"
+          },
+          "kind": "undefined"
+        },
+        {
+          "book": {
+            "copy": "undefined"
+          },
+          "kind": [
+            "literal",
+            "hold"
+          ]
+        },
+        {
+          "book": {
+            "copy": "not a number"
+          },
+          "kind": "absent"
+        },
+        {
+          "book": {
+            "copy": "not a number"
+          },
+          "kind": "undefined"
+        },
+        {
+          "book": {
+            "copy": "not a number"
+          },
+          "kind": [
+            "literal",
+            "hold"
+          ]
+        },
+        {
+          "book": {
+            "copy": "safe integer"
+          },
+          "kind": "absent"
+        },
+        {
+          "book": {
+            "copy": "safe integer"
+          },
+          "kind": "undefined"
+        },
+        {
+          "book": {
+            "copy": "safe integer"
+          },
+          "kind": [
+            "literal",
+            "hold"
+          ]
+        }
+      ],
+      "cases": 23
+    },
+    {
+      "kind": "classifier",
+      "input": "numbers",
+      "file": "src/classifiers/hold-state.ts",
+      "name": "classifyHold",
+      "outcomes": [
+        "held",
+        "noHold",
+        "released"
+      ],
+      "atoms": [
+        "holdUntil === undefined",
+        "today <= holdUntil",
+        "holdUntil - today >= 0"
+      ],
+      "paths": 3,
+      "infeasible": 5,
+      "boundary": 1,
+      "probes": [
+        [
+          -1,
+          0
+        ],
+        [
+          null,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          -1
+        ]
+      ],
+      "cases": 4
+    },
+    {
+      "kind": "classifier",
+      "input": "string",
+      "file": "src/classifiers/library-card.ts",
+      "name": "isLibraryCard",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "/^(M-[0-9]{6}|S-[A-Z]{2}[0-9]{4})$/.test(header)",
+        "header.length !== 8",
+        "/^M-\\d+$/.test(header)",
+        "/^S-[A-Z][A-Z]\\d+$/.test(header)"
+      ],
+      "paths": 3,
+      "infeasible": 10,
+      "boundary": 34,
+      "probes": [
+        null,
+        "S/------",
+        "M-00000/",
+        "M-:00000",
+        "S-A@0000",
+        "S-[A0000",
+        "S-AA000/",
+        "S-AA:000",
+        "SM-00000",
+        "SS-AA000",
+        "S-@A0000",
+        "S-A[0000",
+        "",
+        "S/-----",
+        "S/-------",
+        "SS-AA0000",
+        "S-AA0000-",
+        "S-A0000",
+        "S-AAA0000",
+        "SM-0",
+        "M-000000-",
+        "M-",
+        "S-@A0",
+        "S-[A0",
+        "S-A@0",
+        "S-A[0",
+        "S-AA",
+        "M-000000",
+        "M-900000",
+        "M-0",
+        "M-00000",
+        "M-0000000",
+        "S-AA0000",
+        "S-ZA0000",
+        "S-AA9000",
+        "S-AZ0000",
+        "S-AA0",
+        "S-AA000",
+        "S-AA00000",
+        "S-ZA0",
+        "S-AZ0"
+      ],
+      "cases": 41
+    },
+    {
+      "kind": "classifier",
+      "input": "numbers",
+      "file": "src/classifiers/loan-state.ts",
+      "name": "classifyLoan",
+      "outcomes": [
+        "onTime",
+        "dueToday",
+        "inGrace",
+        "overdue"
+      ],
+      "atoms": [
+        "today < dueOn",
+        "today <= dueOn",
+        "today <= dueOn + 7",
+        "today - dueOn > 7",
+        "today - dueOn > 0",
+        "today - dueOn === 0"
+      ],
+      "paths": 4,
+      "infeasible": 60,
+      "boundary": 2,
+      "probes": [
+        [
+          1,
+          0
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          0,
+          7
+        ],
+        [
+          -8,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "cases": 6
+    },
+    {
+      "kind": "classifier",
+      "input": "unknown",
+      "file": "src/classifiers/parse-failure.ts",
+      "name": "isUndeclaredOption",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "typeof input === 'object'",
+        "input === null",
+        "'code' in input",
+        "input.code === \"ERR_PARSE_ARGS_UNKNOWN_OPTION\""
+      ],
+      "paths": 5,
+      "probes": [
+        "undefined",
+        "null",
+        "array",
+        {
+          "code": "undefined"
+        },
+        {
+          "code": [
+            "literal",
+            "ERR_PARSE_ARGS_UNKNOWN_OPTION"
+          ]
+        }
+      ],
+      "cases": 5
+    },
+    {
+      "kind": "classifier",
+      "input": "unknown",
+      "file": "src/classifiers/parse-failure.ts",
+      "name": "isStrayWord",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "typeof input === 'object'",
+        "input === null",
+        "'code' in input",
+        "input.code === \"ERR_PARSE_ARGS_UNEXPECTED_POSITIONAL\""
+      ],
+      "paths": 5,
+      "probes": [
+        "undefined",
+        "null",
+        "array",
+        {
+          "code": "undefined"
+        },
+        {
+          "code": [
+            "literal",
+            "ERR_PARSE_ARGS_UNEXPECTED_POSITIONAL"
+          ]
+        }
+      ],
+      "cases": 5
+    },
+    {
+      "kind": "classifier",
+      "input": "unknown",
+      "file": "src/classifiers/parse-failure.ts",
+      "name": "isMisfitValue",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "typeof input === 'object'",
+        "input === null",
+        "'code' in input",
+        "input.code === \"ERR_PARSE_ARGS_INVALID_OPTION_VALUE\""
+      ],
+      "paths": 5,
+      "probes": [
+        "undefined",
+        "null",
+        "array",
+        {
+          "code": "undefined"
+        },
+        {
+          "code": [
+            "literal",
+            "ERR_PARSE_ARGS_INVALID_OPTION_VALUE"
+          ]
+        }
+      ],
+      "cases": 5
+    },
+    {
+      "kind": "classifier",
+      "input": "unknown",
+      "file": "src/classifiers/renewal-form.ts",
+      "name": "isRenewalForm",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "typeof input === 'object'",
+        "input === null",
+        "'card' in input",
+        "'today' in input",
+        "typeof input.card === 'string'",
+        "Number.isSafeInteger(input.today)",
+        "typeof input.today === 'number'"
+      ],
+      "paths": 7,
+      "probes": [
+        "undefined",
+        "null",
+        "array",
+        {
+          "card": "absent",
+          "today": "undefined"
+        },
+        {
+          "card": "absent",
+          "today": "not a number"
+        },
+        {
+          "card": "absent",
+          "today": "safe integer"
+        },
+        {
+          "card": "undefined",
+          "today": "absent"
+        },
+        {
+          "card": "undefined",
+          "today": "undefined"
+        },
+        {
+          "card": "undefined",
+          "today": "not a number"
+        },
+        {
+          "card": "undefined",
+          "today": "safe integer"
+        },
+        {
+          "card": "string",
+          "today": "absent"
+        },
+        {
+          "card": "string",
+          "today": "undefined"
+        },
+        {
+          "card": "string",
+          "today": "not a number"
+        },
+        {
+          "card": "string",
+          "today": "safe integer"
+        }
+      ],
+      "cases": 14
+    },
+    {
+      "kind": "classifier",
+      "input": "string",
+      "file": "src/classifiers/shelf-kind.ts",
+      "name": "classifyShelfMark",
+      "outcomes": [
+        "reference",
+        "lending",
+        "unreadable"
+      ],
+      "atoms": [
+        "/^[A-Z]{3} .+ [0-9]{4}$/.test(mark)",
+        "title.startsWith('REF ')",
+        "/^[A-Z][A-Z][A-Z] REF .* \\d\\d\\d\\d$/.test(mark)",
+        "/^[A-Z][A-Z][A-Z] .+ \\d\\d\\d\\d$/.test(mark)"
+      ],
+      "paths": 3,
+      "infeasible": 12,
+      "boundary": 40,
+      "probes": [
+        "",
+        "AAAARE   0000",
+        "AAA R 0000/",
+        "AA  REF 0000",
+        "AAAA   0000",
+        "AA@ REF 0000",
+        "[AA REF 0000",
+        "AAA  0000",
+        "AAA REF 000",
+        "AAA R 00000",
+        "AAA REF 000/",
+        "AAA REF :000",
+        "AAAARE REF  0000",
+        "@AA REF 0000",
+        "A@A REF 0000",
+        "A[A REF 0000",
+        "AA[ REF 0000",
+        "AAA REF 0000/",
+        "AAA REF \nAAA   0000",
+        "AA  REF  0000",
+        "AA@ REF  0000",
+        "[AA REF  0000",
+        "AAA REF 0 000",
+        "AAA REF 00000",
+        "AAA REF  000/",
+        "AAA REF  :000",
+        "AAA REF \nAAA REF  0000",
+        "AAA REF  0000/",
+        "@AA REF  0000",
+        "A@A REF  0000",
+        "A[A REF  0000",
+        "AA[ REF  0000",
+        "AAA REF 0000",
+        "ZAA REF 0000",
+        "AAA R 0000",
+        "AAA REF 9000",
+        "AAA REFAA REF  0000",
+        "AZA REF 0000",
+        "AAZ REF 0000",
+        "AAA REF  0000",
+        "ZAA REF  0000",
+        "AAA REF  9000",
+        "AZA REF  0000",
+        "AAZ REF  0000"
+      ],
+      "cases": 44
+    },
+    {
+      "kind": "classifier",
+      "input": "string",
+      "file": "src/classifiers/staff-note.ts",
+      "name": "mentionsStaff",
+      "outcomes": [
+        false,
+        true
+      ],
+      "atoms": [
+        "/\\bstaff\\b/i.test(note)",
+        "/^staff$|^staff[^A-Za-z0-9_]|[^A-Za-z0-9_]staff$|[^A-Za-z0-9_]staff[^A-Za-z0-9_]/i.test(\n    note,\n  )"
+      ],
+      "paths": 2,
+      "infeasible": 2,
+      "boundary": 32,
+      "probes": [
+        "",
+        "SSTAFF",
+        "STAFF0",
+        "SSTAFF:",
+        "STAFF9",
+        "!STAFF0",
+        "0STAFF",
+        "9STAFF",
+        "0STAFF:",
+        "9STAFF:",
+        "!STAFF9",
+        "STAFF:STAFF",
+        "STAFF@",
+        "STAFF[",
+        "STAFF`",
+        "STAFF{",
+        "STAFF/",
+        "STAFF:",
+        "@STAFF",
+        "[STAFF",
+        "`STAFF",
+        "{STAFF",
+        "/STAFF",
+        ":STAFF",
+        "@STAFF@STAFF@",
+        "[STAFF:",
+        "`STAFF`STAFF:",
+        "{STAFF:{STAFF{",
+        "/STAFF:",
+        ":STAFF@",
+        "!STAFF[",
+        "!STAFF`STAFF`",
+        "!STAFF{STAFF{",
+        "!STAFF/"
+      ],
+      "cases": 34
+    },
+    {
+      "kind": "conversion",
+      "file": "src/conversions/due-day.ts",
+      "name": "dueDayOf",
+      "inputs": [
+        "date"
+      ],
+      "neighbours": 7,
+      "equivalent": 0,
+      "probes": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          -1
+        ],
+        [
+          -86400001
+        ],
+        [
+          86399999
+        ],
+        [
+          "invalid"
+        ]
+      ],
+      "assumes": [],
+      "cases": 6
+    },
+    {
+      "kind": "decision",
+      "file": "src/decisions/approval-facts.ts",
+      "name": "decide",
+      "outcomes": [
+        "approve",
+        "deny",
+        "notFound",
+        "retry"
+      ],
+      "style": "positional",
+      "dimensions": [
+        {
+          "name": "facts",
+          "values": [
+            {
+              "kind": "missing"
+            },
+            {
+              "kind": "unavailable"
+            },
+            {
+              "kind": "found",
+              "role": "reviewer",
+              "account": "active"
+            },
+            {
+              "kind": "found",
+              "role": "reviewer",
+              "account": "suspended"
+            },
+            {
+              "kind": "found",
+              "role": "owner",
+              "account": "active"
+            },
+            {
+              "kind": "found",
+              "role": "owner",
+              "account": "suspended"
+            }
+          ]
+        }
+      ],
+      "cases": 6
+    },
+    {
+      "kind": "decision",
+      "file": "src/decisions/authorize.ts",
+      "name": "authorize",
+      "outcomes": [
+        "deny",
+        "setApproved",
+        "clearApproved",
+        "editTag"
+      ],
+      "style": "record",
+      "dimensions": [
+        {
+          "name": "role",
+          "values": [
+            "reviewer",
+            "owner",
+            "visitor"
+          ]
+        },
+        {
+          "name": "operation",
+          "values": [
+            "grantApproval",
+            "revokeApproval",
+            "editOrdinaryTag"
+          ]
+        },
+        {
+          "name": "accountState",
+          "values": [
+            "active",
+            "suspended"
+          ]
+        },
+        {
+          "name": "tenant",
+          "values": [
+            "sameTenant",
+            "otherTenant"
+          ]
+        },
+        {
+          "name": "ownership",
+          "values": [
+            "ownsProvider",
+            "doesNotOwn"
+          ]
+        }
+      ],
+      "cases": 72
+    },
+    {
+      "kind": "decision",
+      "file": "src/decisions/derive-role.ts",
+      "name": "deriveRole",
+      "outcomes": [
+        "reviewer",
+        "owner",
+        "visitor"
+      ],
+      "style": "positional",
+      "dimensions": [
+        {
+          "name": "membership",
+          "values": [
+            "none",
+            "admin",
+            "member"
+          ]
+        },
+        {
+          "name": "reviewerFlag",
+          "values": [
+            false,
+            true
+          ]
+        }
+      ],
+      "cases": 6
+    },
+    {
+      "kind": "route",
+      "file": "src/wiring/provider-request.ts",
+      "name": "execute",
+      "keys": [
+        "deny",
+        "setApproved",
+        "clearApproved",
+        "editTag"
+      ],
+      "cases": 4
+    },
+    {
+      "kind": "route",
+      "file": "src/wiring/provider-request.ts",
+      "name": "statusOf",
+      "keys": [
+        "unavailable",
+        "written",
+        "conflict",
+        "denied"
+      ],
+      "cases": 4
+    },
+    {
+      "kind": "handler",
+      "file": "src/wiring/provider-request.ts",
+      "name": "handleProviderRequest",
+      "guards": [],
+      "cases": 1
+    },
+    {
+      "kind": "route",
+      "file": "src/wiring/renewal-request.ts",
+      "name": "refusal",
+      "keys": [
+        "unreadableCard",
+        "malformedDay"
+      ],
+      "cases": 2
+    },
+    {
+      "kind": "route",
+      "file": "src/wiring/renewal-request.ts",
+      "name": "lookupFailure",
+      "keys": [
+        "none",
+        "unavailable"
+      ],
+      "cases": 2
+    },
+    {
+      "kind": "route",
+      "file": "src/wiring/renewal-request.ts",
+      "name": "renewal",
+      "keys": [
+        "onTime",
+        "dueToday",
+        "inGrace",
+        "overdue"
+      ],
+      "cases": 4
+    },
+    {
+      "kind": "handler",
+      "file": "src/wiring/renewal-request.ts",
+      "name": "handleRenewal",
+      "guards": [
+        {
+          "subject": "isLibraryCard(req.card)",
+          "exits": [
+            "false"
+          ],
+          "statement": "if (!isLibraryCard(req.card)) return refusal.unreadableCard"
+        },
+        {
+          "subject": "isCurrentDay(req.today)",
+          "exits": [
+            "false"
+          ],
+          "statement": "if (!isCurrentDay(req.today)) return refusal.malformedDay"
+        },
+        {
+          "subject": "lookup.kind",
+          "exits": [
+            "none",
+            "unavailable"
+          ],
+          "statement": "if (lookup.kind !== 'found') return lookupFailure[lookup.kind]"
+        }
+      ],
+      "cases": 5
+    }
+  ]
+}

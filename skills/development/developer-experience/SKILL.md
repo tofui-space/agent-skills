@@ -13,6 +13,21 @@ description: >-
 
 # Developer Experience
 
+## Contents
+
+- Why this skill exists
+- The model: Activity × Mechanism
+- Reasoning protocol (apply on every DX-relevant decision, including the silent default)
+- Conditional rules, not reflexes
+- DX vs. adjacent principles
+- Paths
+  - DX-review
+  - DX-redesign
+  - DX-decide
+  - DX-elicit
+- References
+- Knowledge map
+
 ## Why this skill exists
 
 Your trained reflex on "DX" fires a checklist: boilerplate bad, modular good, library good, structure good,

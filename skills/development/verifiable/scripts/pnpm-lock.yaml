@@ -1,0 +1,47 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      ts6:
+        specifier: npm:typescript@6.0.3
+        version: typescript@6.0.3
+      z3-solver:
+        specifier: 5.3.3
+        version: 5.3.3
+
+packages:
+
+  async-mutex@0.3.2:
+    resolution: {integrity: sha512-HuTK7E7MT7jZEh1P9GtRW9+aTWiDWWi9InbZ5hjxrnRa39KS4BW04+xLBhYNS2aXhHUIKZSw3gj4Pn1pj+qGAA==}
+
+  tslib@2.9.1:
+    resolution: {integrity: sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA==}
+
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  z3-solver@5.3.3:
+    resolution: {integrity: sha512-7M2HEYYypcaFib2UOLuR69PHqoOWfXC2VhiVnQggm4ykJXWUfZyZxNhhy9ai1yiu4/yPA9X/rutqSGgafNB4TA==}
+    engines: {node: '>=16'}
+
+snapshots:
+
+  async-mutex@0.3.2:
+    dependencies:
+      tslib: 2.9.1
+
+  tslib@2.9.1: {}
+
+  typescript@6.0.3: {}
+
+  z3-solver@5.3.3:
+    dependencies:
+      async-mutex: 0.3.2

@@ -1,0 +1,44 @@
+[
+  {
+    "file": "src/classifiers/credential-kind.ts",
+    "mutator": "MethodExpression",
+    "original": "header.slice(7)",
+    "replacement": "header",
+    "reason": "The seven characters that the slice drops are \"Bearer \", which holds no dot and no line terminator, so the split count and the line-terminator tests give the same answer on the whole header."
+  },
+  {
+    "file": "src/classifiers/desk-passphrase.ts",
+    "mutator": "Regex",
+    "original": "/^(?=.*[0-9])(?=.*[a-z])(?!.*\\s).{8,}$/",
+    "replacement": "/^(?=.*[0-9])(?=.*[a-z])(?!.*\\s).{8,}/",
+    "reason": "The lookahead (?!.*\\s) already rejects every text with a line break, and without a line break .{8,} reaches the end of the text with or without the $."
+  },
+  {
+    "file": "src/classifiers/hold-request.ts",
+    "mutator": "ConditionalExpression",
+    "original": "!('book' in input)",
+    "replacement": "false",
+    "reason": "The next statement tests typeof input.book, which is already false when the property is missing; the in-test only serves the compiler's narrowing."
+  },
+  {
+    "file": "src/classifiers/library-card.ts",
+    "mutator": "ConditionalExpression",
+    "original": "header === undefined",
+    "replacement": "false",
+    "reason": "Without the guard the pattern is tested against the text \"undefined\", which is not a card, so the answer is false either way."
+  },
+  {
+    "file": "src/classifiers/renewal-form.ts",
+    "mutator": "ConditionalExpression",
+    "original": "!('card' in input) || !('today' in input)",
+    "replacement": "false",
+    "reason": "The type tests that follow are already false when either property is missing; the in-tests only serve the compiler's narrowing."
+  },
+  {
+    "file": "src/classifiers/renewal-form.ts",
+    "mutator": "LogicalOperator",
+    "original": "!('card' in input) || !('today' in input)",
+    "replacement": "!('card' in input) && !('today' in input)",
+    "reason": "The type tests that follow are already false when either property is missing, so it does not matter whether one or both must be missing for the early return."
+  }
+]

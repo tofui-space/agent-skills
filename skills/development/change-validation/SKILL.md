@@ -11,6 +11,18 @@ The value is in the *shape* of the answers, not in asking. A change that fails w
 
 Run this when the user asks or a project instruction requires it. It is a checkpoint, not a reflex after every edit.
 
+## Contents
+
+- Step 1 — Confirm the user is on the current build
+- Step 2 — List what to check
+- Step 3 — Derive the options from the failure modes
+- Step 4 — Print the checks before asking
+- Step 5 — Collect the verdicts
+- Step 6 — Diagnose before touching code
+- Step 7 — Record the verdicts
+- Step 8 — Summarise and stop
+- What this is not
+
 ## Step 1 — Confirm the user is on the current build
 
 Every later answer is worthless if the user is looking at a stale build. Establish this first, before any behaviour question.

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"<skill-dir>/assets/hooks/rebuild-on-edit.mjs\" \"<absolute path to tasks-page config>.json\""
+          }
+        ]
+      }
+    ]
+  }
+}

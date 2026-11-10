@@ -5,6 +5,20 @@ description: "Caps the reading time of a chat response. The user appends a tag t
 
 # Read-Time Budget
 
+## Contents
+
+- Configuration
+- Deriving the budget
+- Tag syntax
+- Sticky caps
+- What counts
+- Structure by budget
+- Fitting the budget
+- Never
+- Structural completeness
+- User size specifications
+- Scope
+
 ## Configuration
 
 ```
