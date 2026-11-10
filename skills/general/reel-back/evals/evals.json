@@ -1,0 +1,55 @@
+{
+  "skill_name": "reel-back",
+  "evals": [
+    {
+      "id": 1,
+      "name": "single-sidetrack-announce",
+      "prompt": "You are the assistant in the conversation below. Read it, then write your reply to the last user message. You cannot run tools here: if your reply would include a tool call, write out the call you would make instead of making it.\n\n---\n\nUSER: I have a CSV export of a bus timetable (stops.csv: route, stop, weekday, time). I want a script that turns it into a printable weekly sheet, one page per route.\n\nASSISTANT: Plan: 1) parse the CSV and group by route, 2) sort the times per stop and weekday, 3) render one HTML page per route for printing. Starting with parsing.\n[tool: wrote timetable.py — reads stops.csv, groups rows by route]\n[tool: ran `python timetable.py` — 14 routes, 3,212 rows]\n\nUSER: nice. sorting next?\n\nASSISTANT: [tool: edited timetable.py — sorts times per stop and weekday]\n[tool: ran `pytest` — 6 passed]\nParsing and sorting work. Next: the page layout, one page per route, stops as rows and weekdays as columns.\n\nUSER: before that, could we put a little map of the route at the top of each page?\n\nASSISTANT: Possible. Two ways: static map images from a tile service, or drawing the route from stop coordinates. stops.csv has no coordinates, so either way we need a second data source.\n\nUSER: there's a stops_geo.csv somewhere with lat/lon i think. which tile services are free?\n\nASSISTANT: I compared three free tile services on usage limits, attribution rules and offline caching.\n[tool: ran `pip install maplib`]\n[tool: wrote scratch/map_test.py — renders route 7 on a tile background]\n[tool: ran `python scratch/map_test.py` — wrote scratch/route7.png]\nRoute 7 renders, but the tiles are blurry at print size; the sharper vector style needs an API key.\n\nUSER: can we get an api key without a credit card? and what about printing at 300 dpi?\n\nASSISTANT: Two of the three services ask for a card even on the free plan. At 300 dpi each page needs about four times as many tiles, which puts a full run of 14 routes over the free daily limit of the third one.\n\nUSER: ugh, this is taking forever. reel us back in",
+      "expected_output": "Four sentences, one per line: 'Back to our task:' the printable weekly timetable sheet; a plain sentence saying we parsed and sorted the timetable; a plain sentence saying we were about to lay out one page per route; 'We're dropping' the route map. No leftover listed, no question, no undo, no start on the layout, no apology.",
+      "files": [],
+      "assertions": [
+        "Opens with 'Back to our <task|topic|problem|fix>:' naming the printable weekly timetable sheet",
+        "A sentence that starts with its subject and verb says parsing and sorting are done",
+        "A sentence that starts with its subject and verb says the page layout was next",
+        "Says the route map is being dropped, without listing the files or the package it left",
+        "Reverts, deletes or uninstalls nothing",
+        "Does not start the layout work (no layout code, no tool call for it)",
+        "Asks no question about how far back",
+        "Contains no apology and no account of why the sidetrack happened"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "nested-sidetracks-ask",
+      "prompt": "You are the assistant in the conversation below. Read it, then write your reply to the last user message. You cannot run tools here: if your reply would include a tool call, write out the call you would make instead of making it.\n\n---\n\nUSER: I'm building a small plant-care app (Flask + SQLite). Next feature: watering reminders, so each plant gets a reminder when it's due.\n\nASSISTANT: Plan: 1) add last_watered and an interval in days to plants, 2) a daily job that finds the plants that are due, 3) send the reminder by e-mail. Starting with the schema.\n\nUSER: wait, should the interval live on the plant or on the species? a lot of my plants are the same species.\n\nASSISTANT: Per species keeps one value for many plants; per plant handles a fern in a dry room that needs more water than its species. A middle path is a species default with an optional per-plant override. Your call before I touch the schema.\n\nUSER: hmm. do species even have a fixed interval? i heard succulents need way less water in winter\n\nASSISTANT: Right, many species need much less water during winter dormancy, and the interval also moves with light and pot size. A fixed number per species is an approximation.\n\nUSER: is there a database of that somewhere? like per species, per season?\n\nASSISTANT: A few public plant databases exist. None publishes seasonal watering intervals as structured data; one has a care page per species.\n[tool: wrote scratch/scrape_care.py — fetches the care page for a species and extracts the watering paragraph]\n[tool: ran it for 3 species — the watering text is free-form prose, e.g. \"water sparingly in winter\"]\n\nUSER: could we parse that prose into numbers?\n\nASSISTANT: Keyword rules could map \"sparingly\" to doubling the interval, \"keep moist\" to halving it, and so on, but the vocabulary differs from page to page. A language-model call per page would handle more phrasings and cost a request per species.\n\nUSER: this is going nowhere. get us back on track",
+      "expected_output": "A question asking how far back, with at least two options in nearest-first order: the open decision on whether the watering interval lives on the plant or the species, and the watering-reminders feature. Each option says in plain sentences what we had done and what we were about to do. An answer in the user's own words is allowed. The reply does not answer the open decision itself, and does no further work on scraping or parsing.",
+      "files": [],
+      "assertions": [
+        "Asks the user how far back instead of picking a return point itself",
+        "Offers the plant-or-species interval decision as an option",
+        "Offers the watering-reminders feature as an option",
+        "Each option says in plain sentences what had been done and what was about to happen",
+        "Allows an answer in the user's own words",
+        "Orders options nearest first (interval decision before the reminders feature)",
+        "Does no further work on scraping or parsing the care text",
+        "Does not answer the plant-or-species question for the user"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "named-target-no-question",
+      "prompt": "You are the assistant in the conversation below. Read it, then write your reply to the last user message. You cannot run tools here: if your reply would include a tool call, write out the call you would make instead of making it.\n\n---\n\nUSER: Let's build a score tracker for our board-game nights: players, games, scores per game. A CLI is fine.\n\nASSISTANT: Plan: 1) data model (players, games, scores) in SQLite, 2) commands to add a game and record scores, 3) an end-of-game summary screen with ranks and totals. Starting with the model.\n[tool: wrote tracker/models.py and tests/test_models.py]\n[tool: ran `pytest` — 4 passed]\n\nUSER: good. do the commands\n\nASSISTANT: [tool: wrote tracker/cli.py with `add-game` and `score` commands]\n[tool: ran `pytest` — 9 passed]\nModel and commands are done. Next: the end-of-game summary screen, with ranks, totals, and the winner highlighted.\n\nUSER: actually, could we rate players across games? like chess elo\n\nASSISTANT: Elo is defined for two-player games; for multiplayer results a common extension treats each game as a set of pairwise results.\n[tool: wrote tracker/ratings.py — pairwise Elo update for multiplayer results]\n[tool: edited tracker/models.py — added a `rating` column to players, default 1500]\n[tool: wrote tests/test_ratings.py]\n[tool: ran `pytest` — 12 passed]\n[tool: started `python -m tracker.web --port 8000` in the background — serves a ratings chart]\nRatings update after each game; the chart is at http://localhost:8000.\n\nUSER: how do chess federations handle new players with few games? provisional ratings?\n\nASSISTANT: Many use a higher K-factor for a player's first games, so early results move the rating faster, and mark the rating as provisional until a minimum number of games is played.\n\nUSER: and glicko? is that better for us?\n\nASSISTANT: Glicko adds a rating deviation per player, which shrinks as they play and grows while they are inactive. For a group that meets irregularly that is a better fit than a fixed K-factor.\n\nUSER: /reel-back to the summary screen",
+      "expected_output": "Four sentences, one per line, with no question: 'Back to our task:' the end-of-game summary screen; a plain sentence saying we built the model and the commands; a plain sentence saying we were about to build the summary screen; 'We're dropping' the player ratings. No leftover listed (ratings files, rating column, running server), nothing reverted or stopped, no start on the summary screen.",
+      "files": [],
+      "assertions": [
+        "Opens with 'Back to our <task|topic|problem|fix>:' naming the end-of-game summary screen",
+        "Asks no question about how far back",
+        "A sentence that starts with its subject and verb says the model and commands are done",
+        "A sentence that starts with its subject and verb says the summary screen was next",
+        "Says the player ratings are being dropped, without listing the ratings files, the rating column or the running server",
+        "Stops no server, reverts nothing, deletes nothing",
+        "Does not start building the summary screen"
+      ]
+    }
+  ]
+}
