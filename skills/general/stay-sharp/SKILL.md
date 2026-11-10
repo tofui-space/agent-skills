@@ -7,6 +7,18 @@ description: Assistant-to-user directive — don't take the above on faith. Afte
 
 A directive from the assistant to the user: don't take the above on faith. After an authoritative technical or regulatory answer, this skill appends a short **Stay sharp** footer that points to the best official sources and the cheapest independent checks. It exists to keep the user's judgment engaged — the assistant can be confidently wrong, and more importantly, even when the assistant is right, a user who never checks gradually loses the instinct to check at all.
 
+## Contents
+
+- Why this exists
+- When to trigger
+- Output format
+- Selecting sources
+- Writing the checklist
+- Time estimate
+- Scaling to context
+- Manual invocation
+- Examples
+
 ## Why this exists
 
 The risk isn't primarily that the assistant makes mistakes. The assistant does what it's designed to do — synthesize from a training-cutoff snapshot, fill gaps with plausible-sounding text, compress nuance. The real risk is on the user side: a drift from "AI gave me a lead" to "AI gave me the answer", and with it an atrophy of the reflex to open the spec, run the command, read the regulation.

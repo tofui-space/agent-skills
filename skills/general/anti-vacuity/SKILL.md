@@ -5,6 +5,40 @@ description: "Strips vacuous clauses before sending — clauses added to a true 
 
 # Anti-Vacuity Filter
 
+## Contents
+
+- Core principle
+- Why this happens
+- Gate, not revision
+- Activation
+- The check
+- Common sites
+  1. Agreement openers
+  2. Question restatement
+  3. Definitions of known terms
+  4. Walkthroughs of known mechanisms
+  5. Uninformative denials
+  6. Uninformative comparisons
+  7. Meta-commentary about the response
+  8. Hedging filler
+  9. Closing transitions
+  10. Manufactured synthesis
+  11. Mid-document recap transitions
+  12. Templated scene-setting openers
+  13. Vague quantifiers that disguise a known figure
+  14. Passive voice concealing a relevant actor
+- Not vacuous
+- Calibration: reader-aware density
+- Examples
+  - Clause-level: vacuous clause on an informative sentence
+  - Agreement opener + restatement
+  - Definition of a known term
+  - Figurative clause that restates a literal point
+  - Uninformative denial
+  - Closing transition
+  - Manufactured synthesis
+- Anti-domains
+
 ## Core principle
 
 Every clause must add information the reader does not already have. If removing a clause costs the reader nothing, it was vacuous. Strip it.
