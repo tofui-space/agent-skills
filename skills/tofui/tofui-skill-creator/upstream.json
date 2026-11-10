@@ -45,7 +45,11 @@
       "come up with 2-3 realistic test prompts",
       "python -m scripts.package_skill <path/to/skill-folder>",
       "python -m scripts.run_loop \\",
-      "Principle of Lack of Surprise"
+      "Principle of Lack of Surprise",
+      "**description**: When to trigger, what it does."
+    ],
+    "scripts/quick_validate.py": [
+      "if len(description) > 1024:"
     ],
     "scripts/improve_description.py": [
       "def _call_claude(prompt: str, model: str | None, timeout: int = 300)"

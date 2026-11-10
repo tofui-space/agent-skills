@@ -22,6 +22,22 @@ workflow is the upstream one, kept verbatim in `references/upstream-skill-creato
 synced by script. The addition is a **privacy seal** that governs every byte this skill
 writes; it is not optional, not configurable, and not waived by context.
 
+## Contents
+
+- The privacy seal
+  - The rule
+  - Why it is absolute
+  - The source rule
+  - The three gates
+  - When the author hands you their specifics
+  - Editing existing skills
+  - Where working files go
+- Referencing other skills: ask first
+- Hand-off to skill-final-review
+- The workflow: upstream, with overrides
+- Keeping the fork current
+- Reference files
+
 ---
 
 ## The privacy seal
@@ -201,6 +217,7 @@ a missing one means this table needs a human look.
 |---|---|
 | *Capture Intent*: "extract answers from the conversation history first" | Extract the **pattern** only — steps, tools, corrections, formats. Every specific in the conversation is the author's; pass the pattern through gate 1 and re-domain it before it becomes content. Add a fifth intent question: generic (default) or project-local, and if project-local, which names are permitted. |
 | *Principle of Lack of Surprise* | Also: the author would not be surprised to find anything about themselves in the skill, because there is nothing. |
+| *Write the SKILL.md*: "**description**: When to trigger, what it does." | Also: the description is at most 1,024 characters as the YAML parser returns it (Agent Skills specification). `sealed package` checks this only as its last step and refuses a longer one, so run `python -m scripts.quick_validate <skill-dir>` after every write to the frontmatter and cut an overrun in the same turn. Trigger lists are where it grows: drop a phrase that repeats the topic list or the skill's own name, which the skill listing already shows. |
 | *Test Cases*: "come up with 2-3 realistic test prompts" | Realism means concrete detail, casual phrasing, file names, typos — all invented under gate 2. Nothing borrowed from the author. |
 | *Running and evaluating*: "Put results in `<skill-name>-workspace/` as a sibling to the skill directory" | Put the workspace **outside any repository that might be committed or published** — the session scratchpad or a temp directory. Subagents run with full access to the author's machine; their outputs must not sit beside the skill. |
 | *Improving the skill* | Transcripts and feedback are full of the author's machine, files, and phrasing. Anything that moves from them into the skill passes gate 2 first. |
