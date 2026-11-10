@@ -1,7 +1,15 @@
 # Recovering from a bad sort
 
-Read this before undoing anything. Every statement here was observed by running the commands, not
-inferred from documentation.
+Read this before undoing anything. Every statement here was observed by running the commands
+against GitButler 0.22.3, not inferred from documentation.
+
+GitButler 0.23 rewrote the snapshot restore and changed undo, and none of this has been run again on
+0.23.2. In the 0.23.2 source, undo of a commit that created a branch now deletes that branch, and a
+restore can switch `HEAD` between a branch and `gitbutler/workspace`. Treat every statement below as
+unconfirmed for 0.23.2, and say so when handing a recovery to the user.
+
+The oplog does not cover linked worktrees: a restore leaves their files alone, and a discard there
+is not recorded at all.
 
 ## A commit landed on the wrong branch
 
