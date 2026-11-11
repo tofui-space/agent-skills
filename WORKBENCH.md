@@ -470,3 +470,40 @@ On-demand audit of accumulated context: the conversation, earlier transcripts, p
 - **The audit runs in a fresh subagent, not in the invoking session (author's direction, 2026-11-06; version 2026-11-06.2).** Reason: the audit's reading (136k-151k tokens per eval run) would land in the context being cleaned. `SKILL.md` (about 1,380 words, down from about 3,600) now only briefs the auditor with the transcript path rather than a summary, relays its short return, says what the user must reply, applies approved changes from the report, and states corrections in chat. `references/audit.md` holds the procedure, adapted so the auditor writes only the report and brief and turns every "ask" into a question in its return. Not a fork of the conversation: a fork would carry the same errors and load. Claude Code's skill-level `context: fork` was checked in its docs (no conversation history, returns a result) and not used, because the approval and apply steps must run in the invoking session and `context` is not an allowed key for the packager's validator. Not tested end to end: the dispatch, the return format and the apply-from-report step have not been run; the eval runs exercised the audit procedure only.
 
 **Left:** land.
+
+
+### verifiable
+
+`development` - language expansion drafted 2026-11-10 - uncommitted
+
+**Scope:** one shared assurance workflow with language-specific references and capability
+reporting. Existing TypeScript executable paths remain valid. C# starts with a standalone
+Roslyn Boolean-decision checker; project loading, other shapes, library contracts,
+reconciliation, pruning and Stryker.NET integration remain unsupported.
+
+**Validation:** stable .NET 10 build and ten C# backend regressions passed in the expansion.
+The TypeScript analysis scripts and runner entries were unchanged in that pass; their full
+tool suite was not rerun. Skill validation passed. Language-routing eval prompts were
+added; agent behavior evals and description optimization were not run.
+
+**Final review:** B1-B3 and N1-N2 accepted and applied. Corrected the TypeScript tool root,
+restored user/instruction precedence, narrowed pruning to retain scoped non-detection
+candidates until purpose review and explicit selection, consolidated the TypeScript
+coverage procedure, and shortened the description. The pilot pruning source and bundled
+copy agree. Six targeted pruning regressions passed across both copies, including CLI
+output and preserving test files. The changed precedence and pruning rules received a
+focused conflict check; no second full review was run.
+
+**Second final review (2026-11-11):** B1-B3, N1-N5 and C1-C3 accepted and applied.
+The description now limits C# to standalone Boolean decision files and leaves C# suite-strength questions to other testing guidance.
+The installed C# rules carry a "Selected files" list, because C# has no settings file; `:init` and `:coverage` write rows to it.
+The cost-disclosure rule names its condition again (writes files or runs longer than about a minute).
+Obligations are now schema `verifiable.csharp/2` and record the Roslyn informational version and the runtime description; the assembly version did not change across Roslyn servicing.
+The three redirect stubs `references/{shapes,tools,contracts}.md` were deleted; nothing linked to them.
+The "Stryker.NET reports untested" limit stays under TypeScript, reworded: it describes `mutation.ts`, not the C# backend.
+Before this review, all 14 guard mutants of `Program.cs` survived the backend suite; the suite now asserts each rejection reason, runs `!=`, `||` and the 12-parameter boundary, checks staleness under `check` as well as `run`, and compares `capabilities` with `capabilities.json`.
+
+**Size after fixes:** body 1,176 words; description 83 words. Privacy scan: zero errors;
+nine Microsoft documentation URL warnings reviewed as subject references.
+
+**Left:** inspect the uncommitted diff and commit if accepted.

@@ -34,8 +34,8 @@ export function plan(rows: readonly Row[]): Planned[] {
       guarded.length === 0
     )
       return of(
-        'remove',
-        'no change to anything it reaches makes one of its assertions fail',
+        'keep',
+        'no assertion notices changes to the counted cells; behavior outside those cells is unmeasured; review the remaining purpose before requesting removal',
         [...row.reaches, ...library.map((seen) => seen.cell)],
       )
     if (guarded.length > 0)
@@ -83,8 +83,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     .map((line) => JSON.parse(line))
   const planned = plan(rows)
   const titles: Record<Action, string> = {
-    remove:
-      'may be removed: each one is skipped, or no change to what it reaches makes it fail',
+    remove: 'may be removed: skipped tests only',
     covered:
       'duplicates computed checks as far as this evidence goes; not removed on this evidence alone',
     keep: 'kept',

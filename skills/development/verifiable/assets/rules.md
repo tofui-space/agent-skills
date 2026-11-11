@@ -1,12 +1,14 @@
 ## Verifiable code
 
-Application code in this project is written so that a tool can compute its checks. These rules apply to every change to code under the claim (the files the project's `verifiable.json` includes).
+These rules apply to the explicitly selected code under the claim, using the language
+backend named below. Installing these instructions does not admit code or establish coverage.
 
-- Write code only in the shapes the inventory admits: decision, classifier, adapter, wiring, conversion. A file that matches no shape holds types and re-exports only.
-- Run the inventory after every change to such code. A `REJECTED` line means the change is not done.
-- Fix a rejection by reshaping the code. Do not silence it with a cast, a non-null assertion, a suppression comment, or by moving code out of the claim.
-- Code that fits no shape goes in a file declared outside the claim, and is reported as not covered, never as covered.
-- Do not write test cases for code in the shapes. Its checks are computed from the types, the constants and the spec. When a check is missing, the spec is missing a condition.
-- Write a spec from the requirement, not from the code. Where the requirement is unknown, ask.
-- A result of unknown, a check that did not run and a spec nobody reviewed are open items. Report them as open.
-- Remove an existing test only with the evidence of a reconciliation: it is skipped, or no change to what it reaches makes it fail.
+- Let the selected tool compute checks from admitted domains and reviewed specs. Do not
+  estimate counts or replace computed obligations with chosen representative cases.
+- Write specs from requirements. If a requirement is unsettled, record it and report it.
+- Report rejections, unsupported capabilities, outside code and checks that did not run.
+  Unknown is not pass, and unsupported is not zero checks.
+- A successful run establishes agreement with the supplied spec within the tool's scope.
+  It does not establish that the spec is correct or that the application is verified.
+- Review reshapes for behavior preservation and run the application's existing tests.
+- Remove tests only with supported reconciliation evidence and the requested authorization.

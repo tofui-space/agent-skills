@@ -49,7 +49,7 @@ Write a contract from the library's documentation or source for the installed ve
 - **Each clause is a computed check.** The contract is a unit with one check per `throws` and per `ensures` entry, run against the real library under the project's runner.
 - **An adapter can stand on a member.** When the adapter's spec exports `port = { contract: '<package>@<version>', member: '<name>' }`, the adapter's catch must name exactly the errors the member lists: one statement each, and no other. This ties the fake that the adapter's checks use to what the real library does.
 - **`diagnose` lists one exit per declared error** at every call of the member that is not inside a `try`.
-- **The reconciliation observes the calls.** Each call of a member in the project's files gets cells: it returns, or it throws under one of the clauses. Each property of an object-literal argument, and each element of a list written in place, is an option cell. `references/coverage.md` explains the lines this produces. A member with empty `throws` and `ensures` is enough to get option cells.
+- **The reconciliation observes the calls.** Each call of a member in the project's files gets cells: it returns, or it throws under one of the clauses. Each property of an object-literal argument, and each element of a list written in place, is an option cell. [Reconciliation evidence](../reconciliation.md) explains the lines this produces. A member with empty `throws` and `ensures` is enough to get option cells.
 
 A call counts as a call of the member when it is written as the member is named and something in it comes from the contract's package. A library that is passed in as an object is called through that object; the reconciliation then prints `NOT OBSERVED` for the member.
 

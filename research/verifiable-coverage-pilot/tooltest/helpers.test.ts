@@ -200,7 +200,7 @@ const row = (fields: Partial<Row> & { test: string }): Row => ({
   ...fields,
 })
 
-test('the prune plan removes only what cannot fail, and keeps what guards a library cell', () => {
+test('the prune plan removes only skipped tests and keeps scoped non-detection for review', () => {
   const planned = plan([
     row({
       test: 'skipped',
@@ -254,7 +254,7 @@ test('the prune plan removes only what cannot fail, and keeps what guards a libr
     planned.map((p) => [p.test, p.action]),
     [
       ['skipped', 'remove'],
-      ['weak', 'remove'],
+      ['weak', 'keep'],
       ['weak on counted code, guards an option', 'keep'],
       ['duplicate', 'covered'],
       ['elsewhere', 'keep'],

@@ -120,7 +120,7 @@ export async function findLoan(catalog: LoanCatalog, card: LibraryCard): Promise
 
 **What the tool computes:** one check per variant, plus one for the error that passes through.
 
-**Spec:** `args` (the arguments after the port); `fake(failure)` returning `{ db, calls }`, where `db` is a port whose method pushes the list of arguments it received onto `calls`, then throws what `failure()` returns, or answers when that is `undefined`; `provoke` with one entry per variant, each a function that returns the error to throw or `undefined`; `unnamed()` returning an error the adapter must pass on; and, when a variant carries data, `expected` with the full result per variant. After each check `calls` must hold exactly one entry, equal to `args`. `portArgs` may state the arguments the port must receive when they differ from `args`. `port = { contract, member }` ties the adapter to a library contract (`references/contracts.md`).
+**Spec:** `args` (the arguments after the port); `fake(failure)` returning `{ db, calls }`, where `db` is a port whose method pushes the list of arguments it received onto `calls`, then throws what `failure()` returns, or answers when that is `undefined`; `provoke` with one entry per variant, each a function that returns the error to throw or `undefined`; `unnamed()` returning an error the adapter must pass on; and, when a variant carries data, `expected` with the full result per variant. After each check `calls` must hold exactly one entry, equal to `args`. `portArgs` may state the arguments the port must receive when they differ from `args`. `port = { contract, member }` ties the adapter to a library contract (`references/typescript/contracts.md`).
 
 ## Wiring
 

@@ -869,3 +869,17 @@ Next, in order (updated 2026-11-10, after the four additions):
 3. A guarantee that depends on the input.
 4. A faster reconciliation for a suite whose every test file builds the application.
 5. Reading a per-test kill matrix in the prune helper; a mutation report of Stryker.NET; a Jest runner.
+
+
+## Pruning scope correction (2026-11-10)
+
+This supersedes the earlier guidance allowing removal from a `cannot fail on the counted
+code` verdict. That verdict describes modeled cells only; the same test can still protect
+unmodeled behavior. Both the pilot and bundled prune helpers now keep such rows with
+their evidence and a request to review the test's remaining purpose. Removal requires
+explicit user selection after that review. Only skipped tests remain in the automatic
+removal category. The skill's workflow, rules and eval expectations follow this boundary.
+
+Run: six targeted regressions in `tooltest/prune-plan.test.ts` passed across the pilot and
+bundled helpers, including CLI plan output and preserving test files. The full historical
+tool suite was not rerun for this correction.

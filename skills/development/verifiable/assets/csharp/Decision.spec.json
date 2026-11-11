@@ -1,0 +1,15 @@
+{
+  "units": {
+    "Example.Decision.CanBorrow": {
+      "requirement": "A copy can be borrowed when it is available and the borrower is not suspended.",
+      "parameters": ["available", "suspended"],
+      "rows": [
+        { "input": [false, false], "outcome": false },
+        { "input": [true, false], "outcome": true },
+        { "input": [false, true], "outcome": false },
+        { "input": [true, true], "outcome": false }
+      ],
+      "unsettled": []
+    }
+  }
+}

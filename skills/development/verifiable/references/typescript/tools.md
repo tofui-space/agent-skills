@@ -84,7 +84,7 @@ Reads one file with the project's TypeScript configuration. It changes nothing. 
 - `merge line <l> ...`: several failure causes become one value;
 - `effect line <l> ...`: an effect inside the logic;
 - `reshape`: one step per finding, each naming the shape it leads to. A step that starts with `no shape` names code that no shape admits;
-- `given` and `scoped` lines, and exits marked `[not taken if the contract holds]`, when a library contract applies (`references/contracts.md`). These rest on a declaration.
+- `given` and `scoped` lines, and exits marked `[not taken if the contract holds]`, when a library contract applies (`references/typescript/contracts.md`). These rest on a declaration.
 
 It reads one file at a time, reports local helpers separately, and follows values through `const` only; a branch on any other variable is reported as open. An `if` with `a || b` is one branch point for the whole condition and one for its left side, so the same comparison can appear under `open` as part of the whole and under `decided` on its own.
 
@@ -105,7 +105,7 @@ Each unit is one test named `<kind> <unit>: <n> cases`. A group fails when a che
 node <skill>/scripts/reconcile.ts --root=<project> --tests=<file>[,<file>] [--runner=node|vitest] [--units=<name>[,<name>]] [--out=<file.jsonl>]
 ```
 
-Runs an existing suite against the computed cells and prints one verdict per test, then a table of cells per unit, then `CONTRACT GAP`, `CONTRACT REFUTED` and `NOT OBSERVED` lines. It writes one JSON row per test to `reports/reconciliation.jsonl` under the project, or to `--out`. `references/coverage.md` explains the output.
+Runs an existing suite against the computed cells and prints one verdict per test, then a table of cells per unit, then `CONTRACT GAP`, `CONTRACT REFUTED` and `NOT OBSERVED` lines. It writes one JSON row per test to `reports/reconciliation.jsonl` under the project, or to `--out`. [Reconciliation evidence](../reconciliation.md) explains the output.
 
 - It needs a fresh obligations file: run the inventory first.
 - It changes no source file of the project. It writes its rows under `reports/`, and under Vitest a temporary configuration into `node_modules/.verifiable/`, which it removes afterwards.
@@ -156,7 +156,7 @@ With Stryker's Vitest runner, set `"vitest": { "related": false }`: the entry fi
 node <skill>/scripts/prune.ts --root=<project> [--rows=<file.jsonl>] [--out=<file.json>]
 ```
 
-Reads the rows of a reconciliation and prints a plan in three lists (may be removed; duplicates computed checks; kept), then the groups of tests with identical evidence. It deletes nothing and writes the plan to `reports/prune-plan.json`. It does not read a per-test kill matrix of a mutation run, so a test that duplicates computed checks is never moved to "may be removed".
+Reads the rows of a reconciliation and prints a plan in three lists (may be removed: skipped tests only; duplicates computed checks; kept), then the groups of tests with identical evidence. It deletes nothing and writes the plan to `reports/prune-plan.json`. A `cannot fail on the counted code` row is kept for review: its assertions may protect unmodeled behavior. Review that remaining purpose before requesting the user's explicit selection for removal. The helper reads neither a per-test mutation kill matrix nor evidence establishing the test's entire purpose; neither scoped non-detection nor duplicate cells authorize deletion.
 
 ## Toolchain facts that cost time when unknown
 
