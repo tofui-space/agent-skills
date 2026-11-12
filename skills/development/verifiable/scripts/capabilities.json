@@ -12,7 +12,7 @@
     "implementation": "scripts/dotnet/Verifiable.csproj",
     "setup": "references/csharp/setup.md",
     "commands": { "paths": "restricted", "coverage": "partial", "mutation": "unsupported", "prune": "unsupported", "init": "instructions" },
-    "shapes": ["decision:boolean"],
+    "shapes": ["decision:boolean", "decision:enum"],
     "runners": ["standalone compiled-method runner"],
     "limits": ["One standalone file, all methods admitted or the file is rejected", "No MSBuild project loading or application assembly execution", "No existing-suite reconciliation or library contracts", "Not the complete coverage workflow"]
   }

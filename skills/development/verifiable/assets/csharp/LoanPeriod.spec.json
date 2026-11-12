@@ -1,0 +1,17 @@
+{
+  "units": {
+    "Example.Lending.LoanPeriod": {
+      "requirement": "Reference copies are not lent. Otherwise a standard member borrows for two weeks and a staff member for four. Any other membership value is refused.",
+      "parameters": ["membership", "reference"],
+      "rows": [
+        { "input": ["Standard", false], "outcome": "TwoWeeks" },
+        { "input": ["Staff", false], "outcome": "FourWeeks" },
+        { "input": ["#unnamed", false], "outcome": "Refused" },
+        { "input": ["Standard", true], "outcome": "Refused" },
+        { "input": ["Staff", true], "outcome": "Refused" },
+        { "input": ["#unnamed", true], "outcome": "Refused" }
+      ],
+      "unsettled": []
+    }
+  }
+}

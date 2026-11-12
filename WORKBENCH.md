@@ -474,11 +474,11 @@ On-demand audit of accumulated context: the conversation, earlier transcripts, p
 
 ### verifiable
 
-`development` - language expansion drafted 2026-11-10 - uncommitted
+`development` - C# backend landed 2026-11-11 as c850b39 - enum decisions and guidance drafted 2026-11-12, uncommitted
 
 **Scope:** one shared assurance workflow with language-specific references and capability
 reporting. Existing TypeScript executable paths remain valid. C# starts with a standalone
-Roslyn Boolean-decision checker; project loading, other shapes, library contracts,
+Roslyn checker for decisions over `bool` and enum values; project loading, other shapes, library contracts,
 reconciliation, pruning and Stryker.NET integration remain unsupported.
 
 **Validation:** stable .NET 10 build and ten C# backend regressions passed in the expansion.
@@ -506,4 +506,23 @@ Before this review, all 14 guard mutants of `Program.cs` survived the backend su
 **Size after fixes:** body 1,176 words; description 83 words. Privacy scan: zero errors;
 nine Microsoft documentation URL warnings reviewed as subject references.
 
-**Left:** inspect the uncommitted diff and commit if accepted.
+**Enum decisions and guidance (2026-11-12):** requested from a C# project whose code the Boolean-only backend could not admit.
+Research ran first, in four notes under `research/verifiable-*.md`; a separate pass then ran every proposed experiment and re-opened the sources, and only confirmed or corrected claims entered the skill.
+The checker now admits `public` enums declared in the checked file as parameter and result types.
+An enum parameter has one cell per named value plus one `#unnamed` cell; that is sound only because the admitted code tests enums for equality with named members and nothing else.
+Decided and not to be reopened without new evidence: no ordering, casts, bit operations, `default`, comparison of two enum parameters, `switch` statements, exceptions, `checked`/`unchecked` or `ref` expressions; a method prints `every input` only when all parameters are `bool`, otherwise `cells`.
+`Admission.cs` holds admission and cells, `Program.cs` the commands, spec checks and run; method bodies are checked on the compiler's bound operations, declarations on syntax.
+Obligations are schema `verifiable.csharp/3`, backend `csharp-decision-v2`; earlier artifacts show as stale.
+New reference `references/csharp/beyond-enumeration.md` covers code no shape admits; the row on repeatable results has no checked source and says so.
+An independent reader checked both new references sentence by sentence against the evidence and the code; its 13 doc corrections and 3 code gaps (`__arglist`, `checked`/`unchecked`, `ref` conditional) are applied.
+Backend suite: 17 tests on SDK 10.0.400. Mutants: 58 of 58 killed on the final code.
+Not run: evals 3 to 6, description optimization.
+The TypeScript tool suite was run on 2026-11-12 on Windows with Node 24.13, in a copy outside the repository with the same folder layout: 56 of 82 tests passed.
+Of the 26 failures, 18 show a path printed with backslashes where the test expects forward slashes, 4 are a Vitest 5.1.0 start-up error, and 4 have no cause established.
+The tool scripts last changed in c850b39 and this stage does not touch them; the suite was not run on Linux or macOS here.
+Not built, with the reasons in the research notes: integer ranges and string sets, records, loading a project file, MSTest integration, Stryker.NET sorting (its report has the fields `mutation.ts` reads, but unit lookup there uses the TypeScript parser), C# reconciliation.
+
+**Size (2026-11-12):** body 1,245 words; description 87 words. Privacy scan: zero errors; documentation URL warnings reviewed as subject references.
+
+**Left:** commit the enum and guidance stage; then records as the next shape.
+The Windows failures of the TypeScript tools are a separate fix and are not part of this stage.

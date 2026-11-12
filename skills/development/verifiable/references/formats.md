@@ -12,11 +12,13 @@ and reconciliation JSONL formats. Their definitions remain in `scripts/project.t
 entry files resolve `VERIFIABLE_TOOLS` to `scripts/`. No language selector is accepted by
 that project configuration. Do not migrate consumers to an invented common schema.
 
-## C# Boolean artifacts
+## C# decision artifacts
 
 Specs are JSON as described in [csharp/shapes.md](csharp/shapes.md).
-Obligations have schema `verifiable.csharp/2`, backend `csharp-boolean-v1`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, units and unsettled points.
-Each unit has a fully qualified name, ordered parameter names, case count and computed checks with typed Boolean input arrays and expected results.
+Obligations have schema `verifiable.csharp/3`, backend `csharp-decision-v2`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, units and unsettled points.
+Each unit has a fully qualified name, ordered parameter names, a `claim` (`every input` or `cells`), the `domains` of its parameters, a case count and the computed checks.
+A domain lists the parameter's type, its values and, for an enum, the number that stands for every unnamed value.
+A check holds an input array and an expected result: JSON booleans for `bool`, and member names or `#unnamed` for enums.
 
 The tool compares a freshly generated artifact with the saved artifact before execution.
 Any change to the source or spec content, the Roslyn informational version or the runtime description makes it stale, even if behavior looks unchanged.

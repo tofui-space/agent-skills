@@ -41,10 +41,12 @@ exit 0 does not mean the spec has received human review.
 
 - **`:paths`:** build the tool if needed (disclose build artifacts), then run `paths` on each
   selected standalone file. Counts are domain combinations, not traced control-flow paths.
+  Report the claim word per method (`every input` or `cells`) and, for an enum parameter, the unnamed cell.
   No specs are checked or methods executed. If one method is unsupported, the whole file
   is rejected and has no admitted count. This version has no single-method line selector.
+  When the rejected code cannot be reshaped into decisions, [beyond-enumeration.md](beyond-enumeration.md) says which other technique fits and what it leaves unchecked.
 - **`:coverage`:** follow [the shared workflow](../coverage.md) in a copy. If extraction is
-  authorized, isolate pure Boolean decisions while preserving the application's calling
+  authorized, isolate pure decisions over `bool` and enum values while preserving the application's calling
   behavior. Run `paths`; write the requirement/spec; run `inventory`, `check`, and `run`.
   If the project has the C# rules installed, add the file's source, spec and obligations row to their list.
   Run the application's existing build and tests separately using its documented commands.
@@ -54,7 +56,7 @@ exit 0 does not mean the spec has received human review.
   helper, infer equivalents, or delete tests. Report the missing integration.
 - **`:init`:** use the common and C# rules assets. Fill the "Selected files" list with one
   row per selected file, or leave "none yet" when scope is pending. Do not impose
-  Boolean-only rules on the entire application.
+  the decision subset's rules on the entire application.
 
 If extraction would change build semantics (conditional compilation, dependency injection, generated code), leave the code outside this checker and explain why.
 

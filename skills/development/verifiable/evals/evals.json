@@ -49,6 +49,15 @@
         "assets/csharp/Decision.cs",
         "assets/csharp/Decision.spec.json"
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "/verifiable:paths LoanPeriod.cs\n\nHow many checks does this loan period rule need? Don't change anything.",
+      "expected_output": "Selects the C# backend and runs its paths command. Reports six checks for Example.Lending.LoanPeriod with the claim word cells, names the #unnamed cell of the membership parameter and the value that stands for it, and does not describe the result as every input. States that no specs or methods were executed and that application build settings were not loaded.",
+      "files": [
+        "assets/csharp/LoanPeriod.cs",
+        "assets/csharp/LoanPeriod.spec.json"
+      ]
     }
   ]
 }

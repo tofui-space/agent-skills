@@ -29,5 +29,5 @@ never finish an unavailable stage by substituting an estimate or a different kin
 ## Language procedures
 
 - [TypeScript coverage](typescript/coverage.md): the existing complete tool workflow.
-- [C# setup](csharp/setup.md): Boolean decisions only; standalone compilation, no library
+- [C# setup](csharp/setup.md): `bool` and enum decisions only; standalone compilation, no library
   contracts or reconciliation. Keep test files even if every computed check passes.

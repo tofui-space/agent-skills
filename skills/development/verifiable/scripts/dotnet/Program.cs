@@ -7,21 +7,21 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 return Tool.MainCommand(args);
 
-internal sealed record SpecRow(bool[] Input, bool Outcome);
+internal sealed record SpecRow(JsonElement[] Input, JsonElement Outcome);
 internal sealed record Spec(string Requirement, string[] Parameters, SpecRow[] Rows, string[] Unsettled);
 internal sealed record Specs(Dictionary<string, Spec> Units);
-internal sealed record Case(bool[] Input, bool Expected);
-internal sealed record Unit(string Name, string[] Parameters, int Cases, Case[] Checks);
+internal sealed record Case(object[] Input, object Expected);
+internal sealed record Domain(string Parameter, string Type, object[] Values, string? Unnamed);
+internal sealed record Unit(string Name, string[] Parameters, string Claim, Domain[] Domains, int Cases, Case[] Checks);
 internal sealed record Report(string Schema, string Backend, string SourceHash, string SpecHash,
     string Compiler, string Runtime, Unit[] Units, string[] Unsettled);
 
 internal static class Tool
 {
-    private const string Version = "csharp-boolean-v1";
+    private const string Version = "csharp-decision-v2";
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -29,6 +29,8 @@ internal static class Tool
         RespectRequiredConstructorParameters = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
     };
+    private static readonly SymbolDisplayFormat RuntimeName = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces);
 
     public static int MainCommand(string[] args)
     {
@@ -48,7 +50,7 @@ internal static class Tool
             {
                 backend = Version,
                 commands = new[] { "paths", "inventory", "check", "run" },
-                shapes = new[] { "decision:boolean" },
+                shapes = new[] { "decision:boolean", "decision:enum" },
                 scope = "one standalone C# source file; all declared methods",
                 unsupported = new[] { "project-loading", "classifiers", "adapters", "wiring",
                     "conversions", "contracts", "reconcile", "mutation", "prune", "test-runner-integration" }
@@ -71,10 +73,7 @@ internal static class Tool
         var source = File.ReadAllText(sourcePath);
         var tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp14));
         var root = tree.GetCompilationUnitRoot();
-        Require(!root.DescendantTrivia().Any(t => t.IsDirective), "preprocessor directives are unsupported");
-        Require(root.Usings.Count == 0 && root.Externs.Count == 0 && root.AttributeLists.Count == 0,
-            "using directives, extern aliases and assembly attributes are unsupported");
-        ValidateMembers(root.Members);
+        Admission.CheckDeclarations(root);
 
         var referencePaths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))?.Split(Path.PathSeparator)
             ?? throw new InvalidOperationException("runtime reference assemblies unavailable");
@@ -83,21 +82,18 @@ internal static class Tool
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release));
         var diagnostics = compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
         Require(diagnostics.Length == 0, string.Join(Environment.NewLine, diagnostics.Select(d => d.ToString())));
-        var model = compilation.GetSemanticModel(tree);
-        var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
-        Require(methods.Length > 0, "no decision methods found");
-        var symbols = methods.Select(m => model.GetDeclaredSymbol(m)
-            ?? throw new InvalidOperationException("method has no symbol")).ToArray();
-        foreach (var (method, symbol) in methods.Zip(symbols)) ValidateMethod(method, symbol, model);
-        var names = symbols.Select(s => $"{s.ContainingType.ToDisplayString()}.{s.Name}").ToArray();
-        Require(names.Distinct().Count() == names.Length, "overloads are unsupported; unit names must be unique");
+        var admitted = Admission.Methods(root, compilation.GetSemanticModel(tree));
+        var domains = admitted.Select(a => a.Inputs.Select(d => new Domain(d.Name,
+            d.Enum == null ? "bool" : d.Enum.Type.ToDisplayString(RuntimeName), d.Tokens,
+            d.Enum?.Unnamed.ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray()).ToArray();
+        string Claim(Admitted unit) => unit.Inputs.Any(d => d.Enum != null) ? "cells" : "every input";
         if (args[0] == "paths")
         {
             Require(options.Count == 1, "paths accepts only --source");
             Console.WriteLine(JsonSerializer.Serialize(new
             {
                 backend = Version, scope = "selected file only; no specs or checks executed",
-                units = symbols.Select((s, i) => new { name = names[i], cases = 1 << s.Parameters.Length })
+                units = admitted.Select((a, i) => new { name = a.Name, cases = a.Cases, claim = Claim(a), domains = domains[i] })
             }, Json));
             return 0;
         }
@@ -111,38 +107,49 @@ internal static class Tool
         var specs = JsonSerializer.Deserialize<Specs>(specText, Json);
         Require(specs?.Units != null, "spec needs a units object");
         var specUnits = specs!.Units;
-        Require(specUnits.Keys.Order().SequenceEqual(names.Order()), "spec must name exactly every admitted method");
+        Require(specUnits.Keys.Order().SequenceEqual(admitted.Select(a => a.Name).Order()),
+            "spec must name exactly every admitted method");
         var units = new List<Unit>();
         var unsettled = new List<string>();
-        for (var index = 0; index < symbols.Length; index++)
+        for (var index = 0; index < admitted.Length; index++)
         {
-            var symbol = symbols[index];
-            var name = names[index];
+            var unit = admitted[index];
+            var name = unit.Name;
             var spec = specUnits[name];
             Require(spec != null && !string.IsNullOrWhiteSpace(spec.Requirement) && spec.Parameters != null
                 && spec.Rows != null && spec.Unsettled != null, $"{name}: requirement, parameters, rows and unsettled are required");
-            var parameters = symbol.Parameters.Select(p => p.Name).ToArray();
+            var parameters = unit.Inputs.Select(d => d.Name).ToArray();
             Require(spec!.Parameters.SequenceEqual(parameters), $"{name}: parameter names/order changed");
-            var count = 1 << parameters.Length;
-            var expected = new Dictionary<int, bool>();
+            var tokens = unit.Inputs.Select(d => d.Tokens).ToArray();
+            var expected = new Dictionary<int, object>();
             foreach (var row in spec.Rows)
             {
                 Require(row != null && row.Input != null && row.Input.Length == parameters.Length,
                     $"{name}: row input must match parameters");
-                var key = row!.Input.Select((v, i) => v ? 1 << i : 0).Sum();
-                Require(expected.TryAdd(key, row.Outcome), $"{name}: duplicate input row");
+                var key = 0;
+                var stride = 1;
+                for (var i = 0; i < parameters.Length; i++)
+                {
+                    var position = Array.IndexOf(tokens[i], Token(row!.Input[i]));
+                    Require(position >= 0, $"{name}: row input must match parameters; {parameters[i]} accepts {string.Join(", ", tokens[i])}");
+                    key += position * stride;
+                    stride *= tokens[i].Length;
+                }
+                var outcome = Token(row!.Outcome);
+                Require(Array.IndexOf(unit.Result.Tokens, outcome) >= 0,
+                    $"{name}: row outcome must be one of {string.Join(", ", unit.Result.Tokens)}");
+                Require(expected.TryAdd(key, outcome!), $"{name}: duplicate input row");
             }
-            Require(expected.Count == count, $"{name}: spec must describe all {count} inputs");
-            var checks = Enumerable.Range(0, count).Select(key => new Case(
-                Enumerable.Range(0, parameters.Length).Select(i => (key & (1 << i)) != 0).ToArray(), expected[key])).ToArray();
+            Require(expected.Count == unit.Cases, $"{name}: spec must describe all {unit.Cases} inputs");
+            var checks = Enumerable.Range(0, unit.Cases).Select(key => new Case(Decode(key, tokens), expected[key])).ToArray();
             Require(spec.Unsettled.All(p => !string.IsNullOrWhiteSpace(p)), $"{name}: unsettled entries must contain text");
             unsettled.AddRange(spec.Unsettled.Select(p => $"{name}: {p}"));
-            units.Add(new Unit(name, parameters, count, checks));
+            units.Add(new Unit(name, parameters, Claim(unit), domains[index], unit.Cases, checks));
         }
         var compiler = typeof(CSharpCompilation).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? throw new InvalidOperationException("compiler informational version unavailable");
-        var report = new Report("verifiable.csharp/2", Version, Hash(source), Hash(specText), compiler,
+        var report = new Report("verifiable.csharp/3", Version, Hash(source), Hash(specText), compiler,
             System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, units.ToArray(), unsettled.ToArray());
         var json = JsonSerializer.Serialize(report, Json);
         if (args[0] == "inventory")
@@ -167,20 +174,19 @@ internal static class Tool
         try
         {
             var assembly = context.LoadFromStream(emitted);
-            for (var index = 0; index < symbols.Length; index++)
+            for (var index = 0; index < admitted.Length; index++)
             {
-                var symbol = symbols[index];
-                var runtimeName = symbol.ContainingType.ToDisplayString(new SymbolDisplayFormat(
-                    typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces));
-                var method = assembly.GetType(runtimeName, throwOnError: true)!
-                    .GetMethod(symbol.Name, BindingFlags.Public | BindingFlags.Static)!;
+                var unit = admitted[index];
+                var method = assembly.GetType(unit.Symbol.ContainingType.ToDisplayString(RuntimeName), throwOnError: true)!
+                    .GetMethod(unit.Symbol.Name, BindingFlags.Public | BindingFlags.Static)!;
                 foreach (var check in units[index].Checks)
                 {
-                    var actual = (bool)method.Invoke(null, check.Input.Cast<object>().ToArray())!;
-                    Require(actual == check.Expected,
-                        $"FAIL {names[index]}({string.Join(",", check.Input)}): expected {check.Expected}, got {actual}");
+                    var call = $"{unit.Name}({string.Join(",", check.Input)})";
+                    var result = method.Invoke(null, check.Input.Select((token, i) => RuntimeValue(assembly, unit.Inputs[i], token)).ToArray());
+                    var actual = ResultToken(unit.Result, result!);
+                    Require(Equals(actual, check.Expected), $"FAIL {call}: expected {check.Expected}, got {actual}");
                 }
-                Console.WriteLine($"PASS {names[index]} {units[index].Cases} checks");
+                Console.WriteLine($"PASS {unit.Name} {unit.Cases} checks ({Claim(unit)})");
             }
             foreach (var point in unsettled) Console.WriteLine($"UNSETTLED {point}");
             Console.WriteLine("Selected standalone methods agree with the supplied spec; human review is separate.");
@@ -189,72 +195,41 @@ internal static class Tool
         finally { context.Unload(); }
     }
 
-    private static void ValidateMembers(SyntaxList<MemberDeclarationSyntax> members)
+    private static object? Token(JsonElement element) => element.ValueKind switch
     {
-        foreach (var member in members)
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.String => element.GetString(),
+        _ => null
+    };
+
+    private static object[] Decode(int key, object[][] tokens)
+    {
+        var input = new object[tokens.Length];
+        for (var i = 0; i < tokens.Length; i++)
         {
-            if (member is BaseNamespaceDeclarationSyntax ns)
-            {
-                Require(ns.Usings.Count == 0 && ns.Externs.Count == 0, "namespace imports are unsupported");
-                ValidateMembers(ns.Members);
-            }
-            else if (member is ClassDeclarationSyntax type)
-            {
-                Require(type.Modifiers.Count == 2 && type.Modifiers.Any(SyntaxKind.PublicKeyword)
-                    && type.Modifiers.Any(SyntaxKind.StaticKeyword) && type.TypeParameterList == null
-                    && type.BaseList == null && type.AttributeLists.Count == 0 && type.ParameterList == null
-                    && type.Members.Count > 0 && type.Members.All(m => m is MethodDeclarationSyntax),
-                    "only public static, non-generic classes containing methods are admitted; no fields, constructors or nested types");
-            }
-            else throw new InvalidOperationException($"unsupported declaration: {member.Kind()}");
+            input[i] = tokens[i][key % tokens[i].Length];
+            key /= tokens[i].Length;
         }
+        return input;
     }
 
-    private static void ValidateMethod(MethodDeclarationSyntax method, IMethodSymbol symbol, SemanticModel model)
+    private static object RuntimeValue(Assembly assembly, Dimension dimension, object token)
     {
-        Require(method.Modifiers.Count == 2 && method.Modifiers.Any(SyntaxKind.PublicKeyword)
-            && method.Modifiers.Any(SyntaxKind.StaticKeyword) && method.AttributeLists.Count == 0
-            && !symbol.IsGenericMethod && !symbol.ReturnsByRef && !symbol.ReturnsByRefReadonly
-            && symbol.ReturnType.SpecialType == SpecialType.System_Boolean
-            && symbol.Parameters.Length <= 12 && symbol.Parameters.All(p => p.Type.SpecialType == SpecialType.System_Boolean)
-            && method.ParameterList.Parameters.All(p => p.Modifiers.Count == 0 && p.Default == null && p.AttributeLists.Count == 0),
-            $"{symbol.Name}: only public static bool methods with up to 12 ordinary bool parameters are admitted");
-        void Expression(ExpressionSyntax expression)
-        {
-            switch (expression)
-            {
-                case LiteralExpressionSyntax literal when literal.IsKind(SyntaxKind.TrueLiteralExpression)
-                    || literal.IsKind(SyntaxKind.FalseLiteralExpression): return;
-                case IdentifierNameSyntax identifier when model.GetSymbolInfo(identifier).Symbol is IParameterSymbol p
-                    && SymbolEqualityComparer.Default.Equals(p.ContainingSymbol, symbol): return;
-                case ParenthesizedExpressionSyntax parentheses: Expression(parentheses.Expression); return;
-                case PrefixUnaryExpressionSyntax unary when unary.IsKind(SyntaxKind.LogicalNotExpression):
-                    Expression(unary.Operand); return;
-                case BinaryExpressionSyntax binary when new[] { SyntaxKind.LogicalAndExpression,
-                    SyntaxKind.LogicalOrExpression, SyntaxKind.BitwiseAndExpression, SyntaxKind.BitwiseOrExpression,
-                    SyntaxKind.ExclusiveOrExpression, SyntaxKind.EqualsExpression, SyntaxKind.NotEqualsExpression }.Contains(binary.Kind()):
-                    Expression(binary.Left); Expression(binary.Right); return;
-                case ConditionalExpressionSyntax conditional:
-                    Expression(conditional.Condition); Expression(conditional.WhenTrue); Expression(conditional.WhenFalse); return;
-                default: throw new InvalidOperationException($"{symbol.Name}: unsupported expression {expression.Kind()}");
-            }
-        }
-        void Statement(StatementSyntax statement)
-        {
-            switch (statement)
-            {
-                case BlockSyntax block: foreach (var child in block.Statements) Statement(child); return;
-                case ReturnStatementSyntax { Expression: not null } ret: Expression(ret.Expression); return;
-                case IfStatementSyntax conditional:
-                    Expression(conditional.Condition); Statement(conditional.Statement);
-                    if (conditional.Else != null) Statement(conditional.Else.Statement);
-                    return;
-                default: throw new InvalidOperationException($"{symbol.Name}: unsupported statement {statement.Kind()}");
-            }
-        }
-        if (method.ExpressionBody != null) Expression(method.ExpressionBody.Expression);
-        else if (method.Body != null) Statement(method.Body);
-        else throw new InvalidOperationException($"{symbol.Name}: missing method body");
+        if (dimension.Enum == null) return token;
+        var type = assembly.GetType(dimension.Enum.Type.ToDisplayString(RuntimeName), throwOnError: true)!;
+        var value = Equals(token, Dimension.UnnamedToken)
+            ? dimension.Enum.Unnamed
+            : dimension.Enum.Members.Single(m => m.Name.Equals(token)).Value;
+        return Enum.ToObject(type, Convert.ChangeType(value, Enum.GetUnderlyingType(type)));
+    }
+
+    private static object ResultToken(Dimension result, object value)
+    {
+        if (result.Enum == null) return (bool)value;
+        var number = Convert.ToDecimal(value);
+        var named = result.Enum.Members.Where(m => m.Value == number).Select(m => m.Name).ToArray();
+        return named.Length == 1 ? named[0] : Dimension.UnnamedToken;
     }
 
     private static void RejectDuplicateKeys(string text)
@@ -278,7 +253,8 @@ internal static class Tool
     }
 
     private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
-    private static void Require([DoesNotReturnIf(false)] bool condition, string message)
+
+    internal static void Require([DoesNotReturnIf(false)] bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
     }

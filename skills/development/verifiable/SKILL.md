@@ -5,7 +5,7 @@ description: >-
   Use on /verifiable and its paths, coverage, mutation, prune and init commands, or when
   asked of TypeScript code which tests it needs, whether its checks can be counted, whether
   a suite is sufficient, or which existing tests actually guard behavior. For C#, only
-  standalone Boolean decision files. Not for C# suite sufficiency, test strength or
+  standalone decision files over bool and enum values. Not for C# suite sufficiency, test strength or
   mutation questions, UI rendering, performance/load tests, other languages, or one quick
   test requested by name.
 ---
@@ -29,7 +29,7 @@ Resolve the target file and its owning project. Read only the corresponding prof
 | Target | Setup and capabilities | Executable scope |
 |---|---|---|
 | TypeScript | [typescript/setup.md](references/typescript/setup.md) | Existing five-shape tools; Node and Vitest runners |
-| C# | [csharp/setup.md](references/csharp/setup.md) | Standalone Boolean decisions only; no solution/project loading |
+| C# | [csharp/setup.md](references/csharp/setup.md) | Standalone decisions over `bool` and enums only; no solution/project loading |
 | Mixed repository | Select each target's profile separately | Keep inventories, specs and results separate |
 | Other language | No backend | Report unsupported; do not invent counts |
 
@@ -43,7 +43,8 @@ For C#, inspect project settings and dependencies before extracting a standalone
 An unsupported command blocks its claim. Name the missing capability and supported next step.
 Do not translate C# to TypeScript, guess cases, or transfer another project's evidence.
 These limits govern only the claims this skill makes.
-For C# code outside the Boolean subset, say it is unsupported here and leave the question to other testing guidance.
+For C# code outside the admitted decision subset, say it is unsupported here and leave the question to other testing guidance.
+When the user asks what to use on such code instead, read [C# beyond enumeration](references/csharp/beyond-enumeration.md) before naming a technique, and repeat its limits with the name.
 
 ## Commands
 
@@ -55,7 +56,7 @@ A bare `/verifiable` activates the stance below instead.
 | Command | Procedure | C# limit |
 |---|---|---|
 | `:paths` | Read-only admission/count diagnosis | Whole standalone file; no exit tracing |
-| `:coverage` | [Shared workflow](references/coverage.md), then language procedure | Boolean decisions only; reconciliation unavailable |
+| `:coverage` | [Shared workflow](references/coverage.md), then language procedure | `bool` and enum decisions only; reconciliation unavailable |
 | `:mutation` | Sort surviving mutants using the selected backend | Unsupported; no Stryker.NET integration |
 | `:prune` | Reconcile, show evidence, remove only what it permits | Unsupported; no C# reconciliation |
 | `:init` | Install scoped instructions below | Only restricted C# scope may be named |
@@ -128,7 +129,8 @@ Lead with the answer. Report:
 
 A read-only command says no files changed except any documented solver cache. Never call
 code verified, safe or fully covered. C# standalone results must say they did not check the
-application build or reconcile its tests. Report successful stages separately from an
+application build or reconcile its tests.
+They also repeat the claim word the tool printed per method: `every input`, or `cells` when an enum is involved. Report successful stages separately from an
 incomplete overall coverage workflow.
 
 ## References loaded only when needed
@@ -137,5 +139,7 @@ incomplete overall coverage workflow.
 - Library assumptions: [TypeScript contracts](references/typescript/contracts.md) or [C# contracts](references/csharp/contracts.md).
 - Tool options/output: [TypeScript tools](references/typescript/tools.md) or C# setup.
 - Reading artifacts or extending a backend: [formats](references/formats.md).
+- C# code no shape admits (state over steps, concurrency, repeatable results, floating point):
+  [C# beyond enumeration](references/csharp/beyond-enumeration.md).
 - Extending C# semantics: [C# evidence](references/csharp/evidence.md). Primary sources and
   executable checks are separate evidence.
