@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { loadProject } from '../tools/project.ts'
 import { reconcile } from '../tools/reconcile.ts'
@@ -228,5 +229,19 @@ test('reconcile links tests to library options and contract clauses', () => {
         checked: 3,
       },
     ],
+  )
+})
+
+test('a test file given with the separator of the operating system is reported with forward slashes', () => {
+  const { rows } = reconcile({
+    project: loadProject(),
+    runner: 'node',
+    tests: [join('legacy', 'hold.test.ts')],
+    units: ['findHold'],
+  })
+  assert.ok(rows.length > 0)
+  assert.deepEqual(
+    rows.filter((row) => !row.test.startsWith('legacy/hold.test.ts > ')),
+    [],
   )
 })

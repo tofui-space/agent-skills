@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, relative, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'ts6'
 import { canonical } from './canonical.ts'
@@ -260,7 +260,6 @@ export async function computeInventory(options: {
   project: Project
 }) {
   const { project } = options
-  const root = project.root
   const shapeOf = project.shapeOf
   const files = project.files()
   const configured = existsSync(project.tsconfig)
@@ -290,13 +289,13 @@ export async function computeInventory(options: {
     false
   if (!strictNulls)
     violations.push({
-      file: relative(root, project.tsconfig),
+      file: project.path(project.tsconfig),
       line: 1,
       rule: 'the project compiles without strictNullChecks, so undefined and null belong to every type and no input is finite; nothing else was looked at; found: turn on strict',
     })
   const unsettled: Array<{ file: string; unit: string; text: string }> = []
   if (!strictNulls) return { obligations, violations, outside, unsettled }
-  const contracts = loadContracts(root, project.contracts)
+  const contracts = loadContracts(project)
   for (const loaded of contracts) {
     for (const problem of loaded.problems)
       violations.push({
@@ -320,7 +319,7 @@ export async function computeInventory(options: {
   for (const file of files) {
     const source = program.getSourceFile(file)
     if (!source) continue
-    const rel = relative(root, file)
+    const rel = project.path(file)
     if (project.isOutside(file)) {
       outside.push(rel)
       continue
@@ -614,7 +613,7 @@ export async function computeInventory(options: {
           if (!existsSync(specPath)) {
             flag(
               fn,
-              `no spec: write ${relative(root, specPath)} exporting function expected(${written}) built from ${vocabulary}`,
+              `no spec: write ${project.path(specPath)} exporting function expected(${written}) built from ${vocabulary}`,
             )
             continue
           }
@@ -638,7 +637,7 @@ export async function computeInventory(options: {
           const read = translateConversion(expected, specSource, inputs)
           for (const p of read.problems)
             violations.push({
-              file: relative(root, specPath),
+              file: project.path(specPath),
               line:
                 specSource.getLineAndCharacterOfPosition(
                   p.node.getStart(specSource),
@@ -797,7 +796,7 @@ export async function computeInventory(options: {
             if (!existsSync(specPath)) {
               flag(
                 fn,
-                `no spec: write ${relative(root, specPath)} exporting function expected(${inputs}) in the same ${vocabulary} vocabulary`,
+                `no spec: write ${project.path(specPath)} exporting function expected(${inputs}) in the same ${vocabulary} vocabulary`,
               )
               return undefined
             }
@@ -825,7 +824,7 @@ export async function computeInventory(options: {
             const spec = read(expected, specSource)
             for (const p of spec.problems)
               violations.push({
-                file: relative(root, specPath),
+                file: project.path(specPath),
                 line:
                   specSource.getLineAndCharacterOfPosition(
                     p.node.getStart(specSource),
@@ -1604,8 +1603,8 @@ export async function computeInventory(options: {
           file: o.file,
           line: 1,
           rule: existsSync(specPath)
-            ? `the spec of ${o.name} (${relative(root, specPath)}) does not export ${missing.join(', ')}, which the checks of ${o.kind === 'route' ? 'a dispatch map' : `a ${o.kind}`} need; found: ${o.name}`
-            : `no spec: write ${relative(root, specPath)} exporting ${needed.join(', ')}; found: ${o.name}`,
+            ? `the spec of ${o.name} (${project.path(specPath)}) does not export ${missing.join(', ')}, which the checks of ${o.kind === 'route' ? 'a dispatch map' : `a ${o.kind}`} need; found: ${o.name}`
+            : `no spec: write ${project.path(specPath)} exporting ${needed.join(', ')}; found: ${o.name}`,
         })
     }
   const names = obligations.map((o) => o.name)
@@ -1625,7 +1624,7 @@ export async function computeInventory(options: {
     for (const text of Array.isArray(open) ? open : [])
       if (typeof text === 'string')
         unsettled.push({
-          file: relative(root, specPath),
+          file: project.path(specPath),
           unit: o.name,
           text,
         })
@@ -1654,7 +1653,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const rejected = new Set(result.violations.map((v) => v.file))
   const isAdmitted = (o: Obligation) =>
     !rejected.has(o.file) &&
-    !rejected.has(relative(root, project.spec(o.name, o.file)))
+    !rejected.has(project.path(project.spec(o.name, o.file)))
   for (const o of result.obligations)
     console.log(
       isAdmitted(o)
@@ -1687,7 +1686,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const current = JSON.stringify(JSON.parse(readFileSync(out, 'utf8')))
     if (current !== JSON.stringify(JSON.parse(json))) {
       console.log(
-        `STALE ${relative(root, out)} differs from the code; rerun the inventory`,
+        `STALE ${project.path(out)} differs from the code; rerun the inventory`,
       )
       process.exitCode = 1
     }

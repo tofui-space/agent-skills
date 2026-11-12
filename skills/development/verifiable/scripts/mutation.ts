@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { isAbsolute, join, matchesGlob, relative } from 'node:path'
+import { isAbsolute, join, matchesGlob } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'ts6'
 import type { Obligation } from './inventory.ts'
@@ -172,7 +172,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   )
   if (!existsSync(report)) {
     console.log(
-      `no mutation report at ${relative(project.root, report)}; run the mutation tool with its JSON reporter first, or name the file with --report=<file>`,
+      `no mutation report at ${project.path(report)}; run the mutation tool with its JSON reporter first, or name the file with --report=<file>`,
     )
     process.exit(2)
   }
@@ -196,7 +196,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     )
   for (const e of stale)
     console.log(
-      `stale     ${e.file} ${e.mutator}  ${flat(e.original)}  ->  ${flat(e.replacement) || '(removed)'}\n          no surviving mutant matches this explanation any more; remove it from ${relative(project.root, project.equivalents)}`,
+      `stale     ${e.file} ${e.mutator}  ${flat(e.original)}  ->  ${flat(e.replacement) || '(removed)'}\n          no surviving mutant matches this explanation any more; remove it from ${project.path(project.equivalents)}`,
     )
   const open = survivors.filter((x) => x.verdict === 'open').length
   const explained = survivors.filter((x) => x.verdict === 'explained').length
@@ -205,7 +205,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   )
   if (open > 0)
     console.log(
-      `an open survivor in counted code is an input the checks do not tell apart from the mutant: add the condition that separates it to the spec, or record in ${relative(project.root, project.equivalents)} why no input can, as { file, mutator, original, replacement, reason }`,
+      `an open survivor in counted code is an input the checks do not tell apart from the mutant: add the condition that separates it to the spec, or record in ${project.path(project.equivalents)} why no input can, as { file, mutator, original, replacement, reason }`,
     )
   process.exit(open + stale.length > 0 || other > 0 ? 1 : 0)
 }

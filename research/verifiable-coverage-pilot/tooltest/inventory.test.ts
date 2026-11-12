@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const pilot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-function inventory(files: Record<string, string>): string {
+function inventory(files: Record<string, string>, ...args: string[]): string {
   const root = mkdtempSync(join(pilot, 'tooltest', '.scratch-'))
   try {
     for (const [path, text] of Object.entries(files)) {
@@ -16,7 +16,7 @@ function inventory(files: Record<string, string>): string {
     }
     const run = spawnSync(
       process.execPath,
-      [join(pilot, 'tools/inventory.ts'), `--root=${root}`],
+      [join(pilot, 'tools/inventory.ts'), `--root=${root}`, ...args],
       {
         encoding: 'utf8',
         env: { ...process.env, NODE_TEST_CONTEXT: undefined },
@@ -132,6 +132,81 @@ test('a project without strictNullChecks is rejected by name', () => {
   assert.match(
     out,
     /REJECTED tsconfig\.json:1 the project compiles without strictNullChecks/,
+  )
+})
+
+test('files in a folder are named with forward slashes', () => {
+  const loose = inventory({
+    'verifiable.json': JSON.stringify({ tsconfig: 'config/tsconfig.json' }),
+    'config/tsconfig.json': JSON.stringify({
+      compilerOptions: { strict: false, module: 'nodenext', noEmit: true },
+    }),
+    'src/types.ts': types,
+  })
+  assert.match(loose, /REJECTED config\/tsconfig\.json:1 /)
+  const stale = inventory(
+    {
+      'tsconfig.json': strict,
+      'src/types.ts': types,
+      'reports/obligations.json': '{}',
+    },
+    '--out=reports/obligations.json',
+    '--check',
+  )
+  assert.match(stale, /STALE reports\/obligations\.json differs from the code/)
+})
+
+test('a missing or faulty spec, and a contract, are named with forward slashes', () => {
+  const code = {
+    'tsconfig.json': strict,
+    'src/types.ts':
+      "export type Minutes = number & { readonly brand: 'Minutes' }\n",
+    'src/classifiers/gone.ts': isGone,
+    'src/conversions/double.ts': `import type { Minutes } from '../types.ts'
+
+export function doubled(whole: Minutes): Minutes {
+  return (whole * 2) as Minutes
+}
+`,
+  }
+  const missing = inventory(code)
+  assert.match(
+    missing,
+    /REJECTED src\/classifiers\/gone\.ts:1 no spec: write spec\/isGone\.spec\.ts exporting function expected\(input\)/,
+  )
+  assert.match(
+    missing,
+    /REJECTED src\/conversions\/double\.ts:3 no spec: write spec\/doubled\.spec\.ts exporting function expected\(whole\)/,
+  )
+  const faulty = inventory({
+    ...code,
+    'spec/isGone.spec.ts': `export function expected(input: unknown): boolean {
+  if (typeof input !== 'object' || input === null) return false
+  return String(input).length === 4
+}
+`,
+    'spec/doubled.spec.ts': `export function expected(whole: number): number {
+  return whole * whole
+}
+`,
+    'spec/contracts/vite@8.ts': `export const contract = {
+  package: 'vite',
+  version: '8',
+  members: { build: { throws: [], ensures: [] } },
+}
+`,
+  })
+  assert.match(
+    faulty,
+    /REJECTED spec\/isGone\.spec\.ts:3 unsupported statement/,
+  )
+  assert.match(
+    faulty,
+    /REJECTED spec\/doubled\.spec\.ts:2 the product of two inputs is not counted/,
+  )
+  assert.match(
+    faulty,
+    /REJECTED spec\/contracts\/vite@8\.ts:1 vite cannot be found from the project root/,
   )
 })
 

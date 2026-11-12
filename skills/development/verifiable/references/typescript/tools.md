@@ -1,6 +1,7 @@
 # The tools
 
 Read this before the first tool run in a project, and whenever a tool prints a line you do not recognise. `<skill>` is the folder of the skill. Every tool takes the project root from `--root=<dir>`, else from the environment variable `VERIFIABLE_ROOT`, else from the working directory.
+The tools print paths, and write them into the obligations file and their reports, with forward slashes on every operating system.
 
 ## Contents
 

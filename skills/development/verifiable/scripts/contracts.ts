@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join } from 'node:path'
+import type { Project } from './project.ts'
 import { type Static, exportedValue, isNamed } from './static-value.ts'
 
 export type Raised =
@@ -109,16 +110,14 @@ function installed(
   return manifest.version ? { version: manifest.version, directory } : undefined
 }
 
-export function loadContracts(
-  root: string,
-  directory: string,
-): LoadedContract[] {
+export function loadContracts(project: Project): LoadedContract[] {
+  const { root, contracts: directory } = project
   if (!existsSync(directory)) return []
   const loaded: LoadedContract[] = []
   for (const name of readdirSync(directory).sort()) {
     if (!name.endsWith('.ts')) continue
     const id = name.slice(0, -3)
-    const file = relative(root, join(directory, name))
+    const file = project.path(join(directory, name))
     const written = fields(exportedValue(join(directory, name), 'contract'))
     const members = fields(written?.members)
     if (

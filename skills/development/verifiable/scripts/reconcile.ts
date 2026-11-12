@@ -74,7 +74,8 @@ type Unit = {
   readonly carriesOn: (cell: string, to: number) => boolean
 }
 
-const tools = dirname(fileURLToPath(import.meta.url))
+// Node reads a Windows path such as C:\tools\flip.ts as a URL with the scheme "c:", so a tool file is named by its file URL.
+const toolUrl = (name: string) => new URL(name, import.meta.url).href
 type Counted = Exclude<
   Obligation,
   { kind: 'handler' | 'contract' | 'conversion' }
@@ -156,7 +157,7 @@ export function wrapped(
     (a, b) => b.from - a.from || b.to - a.to || (a.span ?? 0) - (b.span ?? 0),
   ))
     out = out.slice(0, edit.from) + edit.text + out.slice(edit.to)
-  return `import { flipped as __flipped, flippedMap as __flippedMap, options as __options, ported as __port } from '${join(tools, 'flip.ts')}'\n${out}\n${wrappers.join('\n')}\n`
+  return `import { flipped as __flipped, flippedMap as __flippedMap, options as __options, ported as __port } from '${toolUrl('flip.ts')}'\n${out}\n${wrappers.join('\n')}\n`
 }
 
 let lastOutput = ''
@@ -179,7 +180,7 @@ function nodeTest(
     const run = spawnSync(
       process.execPath,
       [
-        `--import=${join(tools, 'flip-register.ts')}`,
+        `--import=${toolUrl('flip-register.ts')}`,
         '--test',
         '--test-reporter=tap',
         ...(only ? [`--test-name-pattern=${alone(only)}`] : []),
@@ -241,7 +242,7 @@ function vitestConfig(project: Project, wrappedFile: string): string {
   const setup = join(directory, 'setup.mjs')
   writeFileSync(
     setup,
-    `import { portsReady } from ${JSON.stringify(join(tools, 'flip.ts'))}\n\nawait portsReady()\n`,
+    `import { portsReady } from ${JSON.stringify(toolUrl('flip.ts'))}\n\nawait portsReady()\n`,
   )
   const wrapping = createHash('sha256')
     .update(readFileSync(wrappedFile))
@@ -250,6 +251,7 @@ function vitestConfig(project: Project, wrappedFile: string): string {
     path,
     `// wrapped sources ${wrapping}
 import { readFileSync } from 'node:fs'
+import { normalize } from 'node:path'
 import { defineConfig, mergeConfig } from 'vitest/config'
 ${own ? `import own from ${JSON.stringify(own)}` : 'const own = {}'}
 
@@ -265,7 +267,7 @@ export default mergeConfig(
         name: 'verifiable-flip',
         enforce: 'pre',
         load(id) {
-          const file = id.split('?')[0]
+          const file = normalize(id.split('?')[0])
           return file in wrapped ? wrapped[file] : null
         },
       },
@@ -351,10 +353,11 @@ export function reconcile(options: {
   units?: readonly string[]
 }) {
   const { project } = options
+  const tests = options.tests.map(project.path)
   const run = (
     env: Record<string, string>,
     only?: Only,
-    files: readonly string[] = options.tests,
+    files: readonly string[] = tests,
   ) =>
     (options.runner === 'vitest' ? vitest : nodeTest)(
       project,
@@ -376,7 +379,7 @@ export function reconcile(options: {
   )
   const found = options.units
     ? { sites: [], unobserved: [], calls: [] }
-    : findSites(project, loadContracts(project.root, project.contracts))
+    : findSites(project, loadContracts(project))
   const units: Unit[] = [
     ...counted.map(
       (o): Unit => ({
@@ -467,7 +470,7 @@ export function reconcile(options: {
   const baseline = run({})
   if (baseline.size === 0)
     throw new Error(
-      `the runner reported no test for ${options.tests.join(', ')}; its output ended with:\n${lastOutput.slice(-2000)}`,
+      `the runner reported no test for ${tests.join(', ')}; its output ended with:\n${lastOutput.slice(-2000)}`,
     )
   const reachedBy = new Map<string, Set<string>>()
   const reachedAnywhere = new Map<string, Set<string>>()

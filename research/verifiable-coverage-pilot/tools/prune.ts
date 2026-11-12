@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, relative, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadProject, rootFrom } from './project.ts'
 import type { Row } from './reconcile.ts'
@@ -73,7 +73,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   )
   if (!existsSync(file)) {
     console.log(
-      `no reconciliation at ${relative(project.root, file)}; run reconcile.ts on the whole suite, without --units, or name its output with --rows=<file>`,
+      `no reconciliation at ${project.path(file)}; run reconcile.ts on the whole suite, without --units, or name its output with --rows=<file>`,
     )
     process.exit(2)
   }

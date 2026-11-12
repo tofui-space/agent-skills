@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { dirname, relative, resolve } from 'node:path'
+import { dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'ts6'
 import {
@@ -1324,7 +1324,7 @@ export function printReport(path: string, reports: FunctionReport[]): void {
   for (const r of reports) {
     const computable = r.branches.filter((b) => b.computable).length
     console.log(
-      `\n${relative(process.cwd(), resolve(path))}:${r.line} ${r.name}`,
+      `\n${relative(process.cwd(), resolve(path)).split(sep).join('/')}:${r.line} ${r.name}`,
     )
     const decidableExits = r.exits.filter((e) => e.decidable).length
     const never = r.exits.filter((e) => e.never !== undefined).length
@@ -1396,7 +1396,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
           ? dirname(config)
           : process.cwd(),
   )
-  const contracts = loadContracts(project.root, project.contracts)
+  const contracts = loadContracts(project)
   for (const c of contracts)
     for (const problem of c.problems)
       console.log(`contract ${c.id} is not used: ${problem}`)

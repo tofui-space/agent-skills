@@ -129,6 +129,10 @@ test('every surviving mutant is open, explained or outside the claim, and a stal
       )
       assert.match(
         out,
+        /record in spec\/equivalent-mutants\.json why no input can/,
+      )
+      assert.match(
+        out,
         /4 mutants, 1 killed, 3 survived: 1 explained, 1 open, 1 outside the claim; 1 stale explanations/,
       )
       assert.equal(status, 1)
@@ -184,6 +188,24 @@ test('a missing report is said, not guessed', () => {
     assert.match(out, /no mutation report at reports\/mutation\.json/)
     assert.equal(status, 2)
   })
+})
+
+test('a missing reconciliation is said, not guessed', () => {
+  const root = mkdtempSync(join(pilot, 'tooltest', '.scratch-'))
+  try {
+    const done = spawnSync(
+      process.execPath,
+      [join(pilot, 'tools/prune.ts'), `--root=${root}`],
+      { encoding: 'utf8' },
+    )
+    assert.match(
+      done.stdout,
+      /no reconciliation at reports\/reconciliation\.jsonl/,
+    )
+    assert.equal(done.status, 2)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 const row = (fields: Partial<Row> & { test: string }): Row => ({
