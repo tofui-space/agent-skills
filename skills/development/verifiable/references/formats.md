@@ -15,13 +15,16 @@ that project configuration. Do not migrate consumers to an invented common schem
 ## C# decision artifacts
 
 Specs are JSON as described in [csharp/shapes.md](csharp/shapes.md).
-Obligations have schema `verifiable.csharp/3`, backend `csharp-decision-v2`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, units and unsettled points.
-Each unit has a fully qualified name, ordered parameter names, a `claim` (`every input` or `cells`), the `domains` of its parameters, a case count and the computed checks.
-A domain lists the parameter's type, its values and, for an enum, the number that stands for every unnamed value.
-A check holds an input array and an expected result: JSON booleans for `bool`, and member names or `#unnamed` for enums.
+Obligations have schema `verifiable.csharp/4`, backend `csharp-decision-v3`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, units and unsettled points.
+Each unit has a fully qualified name, ordered parameter names, a `claim` (`every input` or `cells`), the `domains` of its parameters and record fields, a case count and the computed checks.
+A domain lists the parameter name, or `<parameter>.<field>` for a record field, its type, its values and `unnamed`: for an enum the number that stands for every unnamed value, written as a string, and `null` for `bool`.
+A check holds an input array with one entry per parameter and an expected result.
+An input is a JSON boolean for `bool`, a member name or `#unnamed` for an enum, and for a record an object with one property per field in declaration order.
+An expected result is a JSON boolean or a member name.
 
 The tool compares a freshly generated artifact with the saved artifact before execution.
-Any change to the source or spec content, the Roslyn informational version or the runtime description makes it stale, even if behavior looks unchanged.
+Any change to the text of the source or spec, the Roslyn informational version or the runtime description makes it stale, even if behavior looks unchanged.
+The hashes are taken over the decoded text, so adding a byte order mark, or saving the same text in another Unicode encoding with its byte order mark, does not.
 A rebuild of the tool itself is not recorded; only the backend constant identifies its semantics.
 Recompute; do not edit hashes or counts by hand.
 The backend constant must change when admission or enumeration semantics change, and the schema when the artifact's fields change. Human review remains separate

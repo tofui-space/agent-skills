@@ -4,6 +4,7 @@ using System.Runtime.Loader;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -21,7 +22,7 @@ internal sealed record Report(string Schema, string Backend, string SourceHash, 
 
 internal static class Tool
 {
-    private const string Version = "csharp-decision-v2";
+    private const string Version = "csharp-decision-v3";
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -50,7 +51,7 @@ internal static class Tool
             {
                 backend = Version,
                 commands = new[] { "paths", "inventory", "check", "run" },
-                shapes = new[] { "decision:boolean", "decision:enum" },
+                shapes = new[] { "decision:boolean", "decision:enum", "decision:record" },
                 scope = "one standalone C# source file; all declared methods",
                 unsupported = new[] { "project-loading", "classifiers", "adapters", "wiring",
                     "conversions", "contracts", "reconcile", "mutation", "prune", "test-runner-integration" }
@@ -83,9 +84,9 @@ internal static class Tool
         var diagnostics = compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
         Require(diagnostics.Length == 0, string.Join(Environment.NewLine, diagnostics.Select(d => d.ToString())));
         var admitted = Admission.Methods(root, compilation.GetSemanticModel(tree));
-        var domains = admitted.Select(a => a.Inputs.Select(d => new Domain(d.Name,
+        var domains = admitted.Select(a => a.Parameters.SelectMany(p => p.Cells.Select(d => new Domain(p.Label(d),
             d.Enum == null ? "bool" : d.Enum.Type.ToDisplayString(RuntimeName), d.Tokens,
-            d.Enum?.Unnamed.ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray()).ToArray();
+            d.Enum?.Unnamed.ToString(System.Globalization.CultureInfo.InvariantCulture)))).ToArray()).ToArray();
         string Claim(Admitted unit) => unit.Inputs.Any(d => d.Enum != null) ? "cells" : "every input";
         if (args[0] == "paths")
         {
@@ -118,7 +119,7 @@ internal static class Tool
             var spec = specUnits[name];
             Require(spec != null && !string.IsNullOrWhiteSpace(spec.Requirement) && spec.Parameters != null
                 && spec.Rows != null && spec.Unsettled != null, $"{name}: requirement, parameters, rows and unsettled are required");
-            var parameters = unit.Inputs.Select(d => d.Name).ToArray();
+            var parameters = unit.Parameters.Select(p => p.Name).ToArray();
             Require(spec!.Parameters.SequenceEqual(parameters), $"{name}: parameter names/order changed");
             var tokens = unit.Inputs.Select(d => d.Tokens).ToArray();
             var expected = new Dictionary<int, object>();
@@ -128,20 +129,36 @@ internal static class Tool
                     $"{name}: row input must match parameters");
                 var key = 0;
                 var stride = 1;
+                var cell = 0;
                 for (var i = 0; i < parameters.Length; i++)
                 {
-                    var position = Array.IndexOf(tokens[i], Token(row!.Input[i]));
-                    Require(position >= 0, $"{name}: row input must match parameters; {parameters[i]} accepts {string.Join(", ", tokens[i])}");
-                    key += position * stride;
-                    stride *= tokens[i].Length;
+                    var parameter = unit.Parameters[i];
+                    var written = row!.Input[i];
+                    var fields = parameter.Cells.Select(d => d.Name).ToArray();
+                    Require(parameter.Record == null || (written.ValueKind == JsonValueKind.Object
+                        && written.EnumerateObject().Select(f => f.Name).ToHashSet().SetEquals(fields)),
+                        $"{name}: row input must match parameters; {parameter.Name} takes an object with {string.Join(", ", fields)}");
+                    foreach (var dimension in parameter.Cells)
+                    {
+                        var position = Array.IndexOf(tokens[cell],
+                            Token(parameter.Record == null ? written : written.GetProperty(dimension.Name)));
+                        Require(position >= 0,
+                            $"{name}: row input must match parameters; {parameter.Label(dimension)} accepts {string.Join(", ", tokens[cell])}");
+                        key += position * stride;
+                        stride *= tokens[cell].Length;
+                        cell++;
+                    }
                 }
                 var outcome = Token(row!.Outcome);
-                Require(Array.IndexOf(unit.Result.Tokens, outcome) >= 0,
-                    $"{name}: row outcome must be one of {string.Join(", ", unit.Result.Tokens)}");
+                Require(Array.IndexOf(unit.Result.Results, outcome) >= 0,
+                    $"{name}: row outcome must be one of {string.Join(", ", unit.Result.Results)}");
                 Require(expected.TryAdd(key, outcome!), $"{name}: duplicate input row");
             }
             Require(expected.Count == unit.Cases, $"{name}: spec must describe all {unit.Cases} inputs");
-            var checks = Enumerable.Range(0, unit.Cases).Select(key => new Case(Decode(key, tokens), expected[key])).ToArray();
+            var checks = Enumerable.Range(0, unit.Cases).Select(key => new Case(PerParameter(unit, Decode(key, tokens),
+                (parameter, own) => new JsonObject(parameter.Cells.Select((d, i) => KeyValuePair.Create(d.Name,
+                    own[i] is bool flag ? (JsonNode?)JsonValue.Create(flag) : JsonValue.Create((string)own[i]))))),
+                expected[key])).ToArray();
             Require(spec.Unsettled.All(p => !string.IsNullOrWhiteSpace(p)), $"{name}: unsettled entries must contain text");
             unsettled.AddRange(spec.Unsettled.Select(p => $"{name}: {p}"));
             units.Add(new Unit(name, parameters, Claim(unit), domains[index], unit.Cases, checks));
@@ -149,7 +166,7 @@ internal static class Tool
         var compiler = typeof(CSharpCompilation).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? throw new InvalidOperationException("compiler informational version unavailable");
-        var report = new Report("verifiable.csharp/3", Version, Hash(source), Hash(specText), compiler,
+        var report = new Report("verifiable.csharp/4", Version, Hash(source), Hash(specText), compiler,
             System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, units.ToArray(), unsettled.ToArray());
         var json = JsonSerializer.Serialize(report, Json);
         if (args[0] == "inventory")
@@ -179,12 +196,19 @@ internal static class Tool
                 var unit = admitted[index];
                 var method = assembly.GetType(unit.Symbol.ContainingType.ToDisplayString(RuntimeName), throwOnError: true)!
                     .GetMethod(unit.Symbol.Name, BindingFlags.Public | BindingFlags.Static)!;
-                foreach (var check in units[index].Checks)
+                var tokens = unit.Inputs.Select(d => d.Tokens).ToArray();
+                for (var key = 0; key < unit.Cases; key++)
                 {
-                    var call = $"{unit.Name}({string.Join(",", check.Input)})";
-                    var result = method.Invoke(null, check.Input.Select((token, i) => RuntimeValue(assembly, unit.Inputs[i], token)).ToArray());
-                    var actual = ResultToken(unit.Result, result!);
-                    Require(Equals(actual, check.Expected), $"FAIL {call}: expected {check.Expected}, got {actual}");
+                    var cells = Decode(key, tokens);
+                    var shown = PerParameter(unit, cells, (parameter, own) =>
+                        $"{{{string.Join(",", parameter.Cells.Select((d, i) => $"{d.Name}={own[i]}"))}}}");
+                    var arguments = PerParameter(unit, cells.Select((token, i) => RuntimeValue(assembly, unit.Inputs[i], token)).ToArray(),
+                        (parameter, own) => assembly.GetType(parameter.Record!.ToDisplayString(RuntimeName), throwOnError: true)!
+                            .GetConstructors().Single().Invoke(own));
+                    var actual = ResultToken(unit.Result, method.Invoke(null, arguments)!);
+                    var expected = units[index].Checks[key].Expected;
+                    Require(Equals(actual, expected),
+                        $"FAIL {unit.Name}({string.Join(",", shown)}): expected {expected}, got {actual}");
                 }
                 Console.WriteLine($"PASS {unit.Name} {unit.Cases} checks ({Claim(unit)})");
             }
@@ -214,6 +238,21 @@ internal static class Tool
         return input;
     }
 
+    /// <summary>Regroups one value per cell into one value per parameter; <paramref name="record"/> builds the value of a record parameter from the values of its fields.</summary>
+    private static object[] PerParameter(Admitted unit, object[] cells, Func<Parameter, object[], object> record)
+    {
+        var grouped = new object[unit.Parameters.Length];
+        var next = 0;
+        for (var i = 0; i < grouped.Length; i++)
+        {
+            var parameter = unit.Parameters[i];
+            var own = cells[next..(next + parameter.Cells.Length)];
+            next += own.Length;
+            grouped[i] = parameter.Record == null ? own[0] : record(parameter, own);
+        }
+        return grouped;
+    }
+
     private static object RuntimeValue(Assembly assembly, Dimension dimension, object token)
     {
         if (dimension.Enum == null) return token;
@@ -228,8 +267,7 @@ internal static class Tool
     {
         if (result.Enum == null) return (bool)value;
         var number = Convert.ToDecimal(value);
-        var named = result.Enum.Members.Where(m => m.Value == number).Select(m => m.Name).ToArray();
-        return named.Length == 1 ? named[0] : Dimension.UnnamedToken;
+        return result.Enum.Members.Single(m => m.Value == number).Name;
     }
 
     private static void RejectDuplicateKeys(string text)

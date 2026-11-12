@@ -474,11 +474,11 @@ On-demand audit of accumulated context: the conversation, earlier transcripts, p
 
 ### verifiable
 
-`development` - C# backend landed 2026-11-11 as c850b39 - enum decisions and guidance drafted 2026-11-12, uncommitted
+`development` - C# backend landed 2026-11-11 as c850b39 - enum decisions and guidance landed 2026-11-12 as d37fb8a - records and the enum-result correction drafted 2026-11-12, uncommitted
 
 **Scope:** one shared assurance workflow with language-specific references and capability
 reporting. Existing TypeScript executable paths remain valid. C# starts with a standalone
-Roslyn checker for decisions over `bool` and enum values; project loading, other shapes, library contracts,
+Roslyn checker for decisions over `bool` values, enums and records of them; project loading, other shapes, library contracts,
 reconciliation, pruning and Stryker.NET integration remain unsupported.
 
 **Validation:** stable .NET 10 build and ten C# backend regressions passed in the expansion.
@@ -524,5 +524,23 @@ Not built, with the reasons in the research notes: integer ranges and string set
 
 **Size (2026-11-12):** body 1,245 words; description 87 words. Privacy scan: zero errors; documentation URL warnings reviewed as subject references.
 
-**Left:** commit the enum and guidance stage; then records as the next shape.
+**Records and the enum-result correction (2026-11-12):** the checker admits a `public readonly record struct` with positional `bool` and enum fields as a parameter.
+The method reads it through its fields and through property patterns; its cells are the product of the fields' cells, and a spec row writes it as a JSON object keyed by field name.
+Decided and not to be reopened without new evidence: no record classes, plain `record struct`, record results, record-typed fields, positional patterns, variables in patterns, record equality, `with`, `new` or calls.
+An independent reader then found a gap in the enum stage landed as d37fb8a: a method could return an enum input unchanged, and two methods returning different unnamed values passed the same complete spec, because every unnamed cell is tried with one representative.
+Corrected, and not to be widened without splitting the unnamed cell first: an enum input is admitted only in `==` or `!=` with a named member and as the input of `is` or `switch`; an enum result is always a named member; `#unnamed` is not an outcome.
+Obligations are schema `verifiable.csharp/4`, backend `csharp-decision-v3`; earlier artifacts show as stale.
+Stated in the references and not fixed in code: a `bool` with a stored byte other than 0 or 1, made by reinterpreting memory, is outside every claim; an expression of about 3000 operands ends the tool with a stack overflow instead of a `REJECTED` line.
+Declined: a depth limit for that case, because a crash prints no verdict and a limit needs its own boundary tests.
+The reader checked 76 statements of the references by reading and by runs: 61 supported, 8 narrower, 2 contradicted (the gap above), 5 instructions; all ten are corrected.
+It made 100 attempts to break the cell claim and 49 malformed specs; apart from the findings above none violated it.
+A separate confirmer then tried to reopen the gap on the corrected code: 170 fixtures, 135 rejected, 35 admitted, none with two results in one cell; `int` and wider enums were sampled, not exhausted.
+It compared the corrected checker with d37fb8a on 129 fixtures without records: the 17 that are no longer admitted all return an enum input.
+Its three narrower statements in the references are corrected.
+Backend suite: 23 tests on SDK 10.0.400. Mutants: 89 of 89 killed on the corrected code, each log checked for a full run.
+Not run: evals 3 to 7, description optimization.
+
+**Size (2026-11-12, records):** body 1,252 words; description 90 words. Privacy scan: zero errors.
+
+**Left:** commit the records stage and the enum-result correction together; the gap stays on `origin/main` until then.
 The Windows failures of the TypeScript tools are a separate fix and are not part of this stage.
