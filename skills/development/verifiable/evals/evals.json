@@ -58,6 +58,15 @@
         "assets/csharp/LoanPeriod.cs",
         "assets/csharp/LoanPeriod.spec.json"
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "/verifiable:paths Renewal.cs\n\nHow many checks does this renewal rule need? Don't change anything.",
+      "expected_output": "Selects the C# backend and runs its paths command. Reports twelve checks for Example.Renewals.CanRenew with the claim word cells, lists the three fields of the request record as request.Membership, request.Overdue and request.Reserved, names the #unnamed cell of request.Membership, and does not describe the result as every input. States that no specs or methods were executed and that application build settings were not loaded.",
+      "files": [
+        "assets/csharp/Renewal.cs",
+        "assets/csharp/Renewal.spec.json"
+      ]
     }
   ]
 }

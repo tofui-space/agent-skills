@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.Operations;
 /// <summary>An admitted enum: its named values and one value that stands for every unnamed one.</summary>
 internal sealed record EnumDomain(INamedTypeSymbol Type, (string Name, decimal Value)[] Members, decimal Unnamed);
 
-/// <summary>The cells of one parameter or of the result: false and true, or the named enum values plus the unnamed cell.</summary>
+/// <summary>The cells of one input or of the result: false and true, or the named enum values plus the unnamed cell.</summary>
 internal sealed record Dimension(string Name, EnumDomain? Enum)
 {
     public const string UnnamedToken = "#unnamed";
@@ -14,9 +14,20 @@ internal sealed record Dimension(string Name, EnumDomain? Enum)
     public object[] Tokens => Enum == null
         ? [false, true]
         : [.. Enum.Members.Select(m => (object)m.Name), UnnamedToken];
+
+    /// <summary>The values a result can take. An admitted method returns constants only, so a result is never unnamed.</summary>
+    public object[] Results => Enum == null ? Tokens : Tokens[..^1];
 }
 
-internal sealed record Admitted(IMethodSymbol Symbol, string Name, Dimension[] Inputs, Dimension Result, int Cases);
+/// <summary>One method parameter: a single dimension, or an admitted record whose positional fields are the dimensions.</summary>
+internal sealed record Parameter(string Name, INamedTypeSymbol? Record, Dimension[] Cells)
+{
+    public string Label(Dimension cell) => Record == null ? Name : $"{Name}.{cell.Name}";
+}
+
+/// <summary>An admitted method. <c>Inputs</c> holds the dimensions of all parameters in declaration order.</summary>
+internal sealed record Admitted(IMethodSymbol Symbol, string Name, Parameter[] Parameters, Dimension[] Inputs,
+    Dimension Result, int Cases);
 
 /// <summary>Decides which source is admitted and which cells its methods have.</summary>
 internal static class Admission
@@ -35,19 +46,31 @@ internal static class Admission
 
     public static Admitted[] Methods(CompilationUnitSyntax root, SemanticModel model)
     {
-        var enums = new Dictionary<INamedTypeSymbol, EnumDomain>(SymbolEqualityComparer.Default);
+        var enums = new Dictionary<ITypeSymbol, EnumDomain>(SymbolEqualityComparer.Default);
         foreach (var declaration in root.DescendantNodes().OfType<EnumDeclarationSyntax>())
         {
             var type = model.GetDeclaredSymbol(declaration) ?? throw new InvalidOperationException("enum has no symbol");
             enums.Add(type, ReadEnum(type));
         }
+        var records = new Dictionary<ITypeSymbol, Dimension[]>(SymbolEqualityComparer.Default);
+        foreach (var declaration in root.DescendantNodes().OfType<RecordDeclarationSyntax>())
+        {
+            var type = model.GetDeclaredSymbol(declaration) ?? throw new InvalidOperationException("record has no symbol");
+            var fields = declaration.ParameterList!.Parameters
+                .Select(p => model.GetDeclaredSymbol(p) ?? throw new InvalidOperationException("record field has no symbol")).ToArray();
+            Tool.Require(fields.All(f => IsBool(f.Type) || enums.ContainsKey(f.Type)),
+                $"{type.Name}: record fields must be bool or enums declared in the file");
+            records.Add(type, [.. fields.Select(f => new Dimension(f.Name, enums.GetValueOrDefault(f.Type)))]);
+        }
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
         Tool.Require(methods.Length > 0, "no decision methods found");
-        var admitted = methods.Select(m => Method(m, model, enums)).ToArray();
+        var admitted = methods.Select(m => Method(m, model, enums, records)).ToArray();
         Tool.Require(admitted.Select(a => a.Name).Distinct().Count() == admitted.Length,
             "overloads are unsupported; unit names must be unique");
         return admitted;
     }
+
+    private static bool IsBool(ITypeSymbol? type) => type?.SpecialType == SpecialType.System_Boolean;
 
     private static void CheckMembers(SyntaxList<MemberDeclarationSyntax> members)
     {
@@ -73,6 +96,15 @@ internal static class Admission
                     && enumeration.Members.All(m => m.AttributeLists.Count == 0),
                     $"{enumeration.Identifier.Text}: only public enums without attributes are admitted");
             }
+            else if (member is RecordDeclarationSyntax record)
+            {
+                Tool.Require(record.Modifiers.Count == 2
+                    && record.Modifiers.Any(SyntaxKind.PublicKeyword) && record.Modifiers.Any(SyntaxKind.ReadOnlyKeyword)
+                    && record.TypeParameterList == null && record.BaseList == null && record.AttributeLists.Count == 0
+                    && record.Members.Count == 0 && record.ParameterList is { Parameters.Count: > 0 } fields
+                    && fields.Parameters.All(p => p.Modifiers.Count == 0 && p.Default == null && p.AttributeLists.Count == 0),
+                    $"{record.Identifier.Text}: only public readonly record structs with ordinary positional fields and no other members are admitted");
+            }
             else throw new InvalidOperationException($"unsupported declaration: {member.Kind()}");
         }
     }
@@ -96,27 +128,31 @@ internal static class Admission
     }
 
     private static Admitted Method(MethodDeclarationSyntax method, SemanticModel model,
-        Dictionary<INamedTypeSymbol, EnumDomain> enums)
+        Dictionary<ITypeSymbol, EnumDomain> enums, Dictionary<ITypeSymbol, Dimension[]> records)
     {
         var symbol = model.GetDeclaredSymbol(method) ?? throw new InvalidOperationException("method has no symbol");
-        bool IsBool(ITypeSymbol? type) => type?.SpecialType == SpecialType.System_Boolean;
-        EnumDomain? EnumOf(ITypeSymbol? type) => type is INamedTypeSymbol named && enums.TryGetValue(named, out var found) ? found : null;
-        bool HasCells(ITypeSymbol? type) => IsBool(type) || EnumOf(type) != null;
+        bool HasCells(ITypeSymbol type) => IsBool(type) || enums.ContainsKey(type);
+        Parameter? Read(IParameterSymbol parameter) =>
+            HasCells(parameter.Type) ? new(parameter.Name, null, [new(parameter.Name, enums.GetValueOrDefault(parameter.Type))])
+            : records.TryGetValue(parameter.Type, out var fields) ? new(parameter.Name, (INamedTypeSymbol)parameter.Type, fields)
+            : null;
 
+        var parameters = symbol.Parameters.Select(Read).ToArray();
         Tool.Require(method.Modifiers.Count == 2 && method.Modifiers.Any(SyntaxKind.PublicKeyword)
             && method.Modifiers.Any(SyntaxKind.StaticKeyword) && method.AttributeLists.Count == 0
             && !symbol.IsGenericMethod && !symbol.IsVararg && !symbol.ReturnsByRef && !symbol.ReturnsByRefReadonly
-            && HasCells(symbol.ReturnType) && symbol.Parameters.All(p => HasCells(p.Type))
+            && HasCells(symbol.ReturnType) && parameters.All(p => p != null)
             && method.ParameterList.Parameters.All(p => p.Modifiers.Count == 0 && p.Default == null && p.AttributeLists.Count == 0),
-            $"{symbol.Name}: only public static methods over bool and enums declared in the file, with ordinary parameters, are admitted");
+            $"{symbol.Name}: only public static methods over bool, enums and records declared in the file, with ordinary parameters, are admitted");
 
-        var inputs = symbol.Parameters.Select(p => new Dimension(p.Name, EnumOf(p.Type))).ToArray();
+        var inputs = parameters.SelectMany(p => p!.Cells).ToArray();
         var cases = inputs.Aggregate(1L, (product, d) => Math.Min(product * d.Tokens.Length, int.MaxValue));
         Tool.Require(cases <= MaxCases, $"{symbol.Name}: domain of {cases} cells exceeds {MaxCases}");
 
         InvalidOperationException Unsupported(string what, IOperation operation) =>
             new($"{symbol.Name}: unsupported {what} {operation.Syntax.Kind()}");
-        bool IsParameter(IOperation operation) => operation is IParameterReferenceOperation;
+        bool IsInput(IOperation operation) => operation is IParameterReferenceOperation
+            or IPropertyReferenceOperation { Instance: IParameterReferenceOperation };
         bool IsConstant(IOperation operation) => operation is IFieldReferenceOperation { Field.IsConst: true };
         bool IsBoolLiteral(IOperation operation) => operation is ILiteralOperation { ConstantValue: { HasValue: true, Value: bool } };
 
@@ -128,23 +164,32 @@ internal static class Admission
                 case IBinaryPatternOperation both: Pattern(both.LeftPattern); Pattern(both.RightPattern); return;
                 case INegatedPatternOperation negated: Pattern(negated.Pattern); return;
                 case IDiscardPatternOperation: return;
+                case IRecursivePatternOperation { DeclaredSymbol: null, DeconstructionSubpatterns.Length: 0 } fields
+                    when records.ContainsKey(fields.MatchedType):
+                    foreach (var field in fields.PropertySubpatterns) Pattern(field.Pattern);
+                    return;
                 default: throw Unsupported("pattern", pattern);
             }
         }
+        ITypeSymbol Operand(IOperation operand) => IsInput(operand) ? operand.Type! : Value(operand);
         ITypeSymbol Value(IOperation operation)
         {
             switch (operation)
             {
                 case ILiteralOperation when IsBoolLiteral(operation):
-                case IParameterReferenceOperation:
                 case IFieldReferenceOperation when IsConstant(operation):
                     break;
-                case IUnaryOperation negation when IsBool(Value(negation.Operand)):
+                case IParameterReferenceOperation or IPropertyReferenceOperation when IsInput(operation):
+                    // Every unnamed enum value is checked through one representative, so a result must not carry an input's value.
+                    Tool.Require(IsBool(operation.Type),
+                        $"{symbol.Name}: an enum input can only be compared with a named member or matched by a pattern; return named members");
+                    break;
+                case IUnaryOperation negation when IsBool(Operand(negation.Operand)):
                     break;
                 case IBinaryOperation binary:
-                    var bools = IsBool(Value(binary.LeftOperand)) & IsBool(Value(binary.RightOperand));
-                    var enumTest = (IsParameter(binary.LeftOperand) && IsConstant(binary.RightOperand))
-                        || (IsConstant(binary.LeftOperand) && IsParameter(binary.RightOperand));
+                    var bools = IsBool(Operand(binary.LeftOperand)) & IsBool(Operand(binary.RightOperand));
+                    var enumTest = (IsInput(binary.LeftOperand) && IsConstant(binary.RightOperand))
+                        || (IsConstant(binary.LeftOperand) && IsInput(binary.RightOperand));
                     var admitted = binary.OperatorKind switch
                     {
                         BinaryOperatorKind.ConditionalAnd or BinaryOperatorKind.ConditionalOr or BinaryOperatorKind.And
@@ -157,10 +202,10 @@ internal static class Admission
                 case IConditionalOperation { WhenFalse: not null, IsRef: false } choice when IsBool(Value(choice.Condition)):
                     Value(choice.WhenTrue); Value(choice.WhenFalse);
                     break;
-                case IIsPatternOperation test when IsParameter(test.Value):
+                case IIsPatternOperation test when IsInput(test.Value):
                     Pattern(test.Pattern);
                     break;
-                case ISwitchExpressionOperation table when IsParameter(table.Value):
+                case ISwitchExpressionOperation table when IsInput(table.Value):
                     foreach (var arm in table.Arms)
                     {
                         if (arm.Guard != null) throw Unsupported("switch guard", arm.Guard);
@@ -190,7 +235,7 @@ internal static class Admission
 
         var body = model.GetOperation(method) as IMethodBodyOperation;
         Statement(body?.BlockBody ?? body?.ExpressionBody ?? throw new InvalidOperationException($"{symbol.Name}: missing method body"));
-        return new Admitted(symbol, $"{symbol.ContainingType.ToDisplayString()}.{symbol.Name}", inputs,
-            new Dimension("result", EnumOf(symbol.ReturnType)), (int)cases);
+        return new Admitted(symbol, $"{symbol.ContainingType.ToDisplayString()}.{symbol.Name}", parameters!, inputs,
+            new Dimension("result", enums.GetValueOrDefault(symbol.ReturnType)), (int)cases);
     }
 }

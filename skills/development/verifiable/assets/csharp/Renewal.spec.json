@@ -1,0 +1,23 @@
+{
+  "units": {
+    "Example.Renewals.CanRenew": {
+      "requirement": "A reserved copy is not renewed. Otherwise a staff member may renew, and a standard member may renew a copy that is not overdue. Any other membership value is refused.",
+      "parameters": ["request"],
+      "rows": [
+        { "input": [{ "Membership": "Standard", "Overdue": false, "Reserved": false }], "outcome": true },
+        { "input": [{ "Membership": "Staff", "Overdue": false, "Reserved": false }], "outcome": true },
+        { "input": [{ "Membership": "#unnamed", "Overdue": false, "Reserved": false }], "outcome": false },
+        { "input": [{ "Membership": "Standard", "Overdue": true, "Reserved": false }], "outcome": false },
+        { "input": [{ "Membership": "Staff", "Overdue": true, "Reserved": false }], "outcome": true },
+        { "input": [{ "Membership": "#unnamed", "Overdue": true, "Reserved": false }], "outcome": false },
+        { "input": [{ "Membership": "Standard", "Overdue": false, "Reserved": true }], "outcome": false },
+        { "input": [{ "Membership": "Staff", "Overdue": false, "Reserved": true }], "outcome": false },
+        { "input": [{ "Membership": "#unnamed", "Overdue": false, "Reserved": true }], "outcome": false },
+        { "input": [{ "Membership": "Standard", "Overdue": true, "Reserved": true }], "outcome": false },
+        { "input": [{ "Membership": "Staff", "Overdue": true, "Reserved": true }], "outcome": false },
+        { "input": [{ "Membership": "#unnamed", "Overdue": true, "Reserved": true }], "outcome": false }
+      ],
+      "unsettled": []
+    }
+  }
+}
