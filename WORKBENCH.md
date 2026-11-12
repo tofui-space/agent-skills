@@ -38,7 +38,7 @@ yes — it stops the question being asked again.
 | [unconvinced-review](#unconvinced-review) | development | ✓ | ✓ | ? | ? | · | delete stray build artifact; review |
 | [comment-driven-development](#comment-driven-development) | development | ✓ | ✓ | · | ✓ | · | review; decide on evals; land |
 | [grill-with-specs](#grill-with-specs) | development | ✓ | ✓ | ✓ | ✓ | · | land |
-| [gitbutler-readonly](#gitbutler-readonly) | development · rule | ✓ | ✓ | ✓ | ✓ | · | land; two findings deferred on purpose |
+| [gitbutler-readonly](#gitbutler-readonly) | development · rule | ✓ | ✓ | ✓ | ✓ | · | land |
 | [gitbutler-sorting](#gitbutler-sorting) | development | ✓ | ✓ | · | · | · | re-run probes on 0.23.2, then probe 3 |
 | [language](#language) | writing · rule | ✓ | ✓ | · | ✓ | · | review, then land |
 | [living-tasks](#living-tasks) | development | ✓ | ✓ | ✓ | ✓ | · | land; upload to claude.ai again |
@@ -235,6 +235,49 @@ observed rather than read, and have not been re-run on 0.23.2.
 
 **Decided:**
 
+- **Per-project opt-ins (2026-11-12).** Two sets, each turned on only by its own exact sentence in
+  the user's own message, and turned off by any clear statement:
+  - local writes ("I opt this project in to local GitButler writes by agents."): commit, amend,
+    squash, reword, move, absorb, split, pick, uncommit, apply, unapply;
+  - push ("I opt this project in to GitButler pushes by agents."): `but push <branch>` for a branch
+    the session created, never a bare `but push`.
+
+  Chosen by the author from options offered. Commands run only on a request in the current
+  conversation, never at the agent's own checkpoints. History edits are limited to commits the
+  session created and that no remote-tracking branch contains, including every commit above them.
+  An oplog snapshot is taken before each request's first write and its ID reported; restore stays
+  the user's. The record lives in the agent's own per-project memory, never in the repository or
+  git config, so a clone cannot carry one in; local git config set by the user, and
+  conversation-only, were declined. **Declined for the opt-ins:** `but pull` (rebases every
+  applied branch and worktree, so another session's work moves under it) and `but discard`
+  (linked-worktree discards are not in the oplog, and a stale file ID can resolve to a commit).
+  The section has not been through `skill-final-review`, so the Review mark was reset.
+- **Re-read against 0.23.4 (2026-11-12), opt-in commands only.** A diff pass compared the two tags
+  over thirteen claims. Every claim that moved the rule was then confirmed at the cited lines; see
+  `research/gitbutler-cli.md`, "0.23.4 re-read". The rule now covers:
+  - selectors that name a directory, `.`, cwd-relative and absolute paths;
+  - commit hooks running by default, and `-n`/`--no-verify`/`--switch` added to the never-pass list;
+  - `amend --target` now being optional;
+  - unapply's "WIP Assignments" commit and its collapse to a single branch;
+  - `push <branch>` also pushing the branches below it;
+  - rewrites conflicting uncommitted changes in linked worktrees;
+  - `pull` pruning remotes.
+
+  The Allowed list was not re-read. Whether a manual snapshot is still `but undo`'s next target is
+  not established at 0.23.4.
+- **skill-final-review ran on the opt-in version (2026-11-12); every finding applied on the
+  author's standing instruction.** Five blocking findings were fixed:
+  - the opt-in conditions now win over a skill or project fast path;
+  - an instruction file that reserves writes or narrows the opt-ins wins, and one that widens them
+    does not;
+  - `git branch -r --contains` and `git config --local --get` were added to the read-only git list;
+  - `but apply` runs only while `gitbutler/workspace` is checked out;
+  - a request's scope is named, with "ask when unclear".
+
+  Non-blocking fixes: the snapshot timing names "opted-in command"; the opt-out has a tie-break;
+  `<remote>` is defined; `but --version` is allowed (source-checked side-effect free) and feeds a
+  version notice; restated lines and history notes were cut. Not changed: the rule is still the
+  largest in the catalog, and splitting it saves nothing because every rule loads together.
 - **A first `but` command in an unopened repository is Ask first (2026-11-06).** Since 0.23 every
   command that opens the project registers it and writes a target to local git config, which is the
   part of the removed `but setup` that still happens. The rule gives a git-only check,
@@ -248,9 +291,12 @@ observed rather than read, and have not been re-run on 0.23.2.
   source. Do not re-import wording from it.
 - **Previews stay in "Ask first", not "Never run".** `pull --check` and `push --dry-run` fetch every
   remote, but they only move remote-tracking refs.
-- **The commit command is excluded even in its explicit-ID form.** With no IDs it sweeps the whole
-  tree, and the rule is read-only by name.
-- **The escape hatch is a verbatim copy of the one in `git-readonly.md`.** Declined for now:
+- **The commit command is excluded even in its explicit-ID form**, outside an opted-in project. With
+  no IDs it sweeps the whole tree, and the rule is read-only by name. Inside an opted-in project,
+  explicit selectors are required and bulk selectors (`@`, `dir/`, a bare worktree name) stay out.
+- **The escape hatch was a verbatim copy of the one in `git-readonly.md`.** Since 2026-11-12 its
+  standing-authorization bullet names the opt-in as the one exception, so the two differ there.
+  `git-readonly.md` has no opt-in and was not changed. Declined for now:
   cross-referencing another rule breaks if the catalog is installed piecemeal, and the question of
   whether this rule may name a sibling is still open with the author.
 - **"Reading `but` output correctly" and "Reading the workspace model" (382w) stay in the rule for
