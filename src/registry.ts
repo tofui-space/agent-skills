@@ -3,7 +3,7 @@ import path from 'node:path'
 import { AGENTS, isAgentId } from './agents.ts'
 import { readManifest } from './install.ts'
 import { cacheDir } from './source.ts'
-import type { AgentDefinition } from './types.ts'
+import type { AgentDefinition, ProjectLog } from './types.ts'
 
 const REGISTRY_FILE = 'installs.json'
 
@@ -98,6 +98,83 @@ export function recordTarget(file: string, target: Target): void {
     (other) => !sameTarget(other, target),
   )
   writeRegistry(file, hasInstalls(target.root) ? [...others, target] : others)
+}
+
+const TOML_PROJECT_HEADER =
+  /^\s*\[projects\.(?:'([^']*)'|"((?:[^"\\]|\\.)*)")\]\s*$/
+
+/** Reads the project directories listed in one agent log file; a missing or unreadable file lists none. */
+export function readProjectLog(
+  file: string,
+  format: ProjectLog['format'],
+): string[] {
+  let text: string
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch {
+    return []
+  }
+
+  if (format === 'json-projects') {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      return []
+    }
+    const projects =
+      typeof parsed === 'object' && parsed !== null
+        ? (parsed as { projects?: unknown }).projects
+        : undefined
+    return typeof projects === 'object' &&
+      projects !== null &&
+      !Array.isArray(projects)
+      ? Object.keys(projects)
+      : []
+  }
+
+  const dirs: string[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const match = TOML_PROJECT_HEADER.exec(line)
+    if (match === null) continue
+    const literal = match[1]
+    const basic = match[2]
+    if (literal !== undefined) dirs.push(literal)
+    else if (basic !== undefined) dirs.push(basic.replace(/\\(.)/g, '$1'))
+  }
+  return dirs
+}
+
+/** Resolves each agent's project log files against `home` and the agent's home config directory. */
+export function projectLogFiles(
+  home: string,
+  configRoot: (agent: AgentDefinition) => string,
+): { file: string; format: ProjectLog['format'] }[] {
+  return Object.values(AGENTS).flatMap((agent) =>
+    agent.projectLogs.map((log) => ({
+      file: path.join(log.base === 'home' ? home : configRoot(agent), log.file),
+      format: log.format,
+    })),
+  )
+}
+
+/**
+ * Finds every `<dir>/<agent config dir>` holding a manifest with entries, for each project directory the agents' own logs list.
+ * Every agent's config directory is checked in every listed project, whichever agent listed it.
+ */
+export function targetsInProjectLogs(
+  logs: readonly { file: string; format: ProjectLog['format'] }[],
+): Target[] {
+  const found: Target[] = []
+  for (const log of logs) {
+    for (const dir of readProjectLog(log.file, log.format)) {
+      for (const agent of Object.values(AGENTS)) {
+        const root = path.join(path.resolve(dir), agent.configDir)
+        if (hasInstalls(root)) found.push({ agent, root })
+      }
+    }
+  }
+  return dedupeTargets(found)
 }
 
 /**

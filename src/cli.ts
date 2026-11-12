@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
+import os from 'node:os'
 import path from 'node:path'
 import { AGENT_IDS, AGENTS, parseAgents } from './agents.ts'
 import { loadCatalog, selectEntries } from './catalog.ts'
@@ -20,12 +21,14 @@ import {
 import {
   dedupeTargets,
   hasInstalls,
+  projectLogFiles,
   readRegistry,
   recordTarget,
   registryFile,
   sameTarget,
   scanForTargets,
   type Target,
+  targetsInProjectLogs,
 } from './registry.ts'
 import {
   cacheHeadCommit,
@@ -170,7 +173,7 @@ interface TargetSelection {
 /**
  * The config directories `update` and `status` act on.
  * With --dir or --global it is that one location per chosen agent, as for `add`.
- * Otherwise it is every registered directory, plus each agent's home config directory and the current directory, so installs made before the registry existed are reached too; --agent narrows it to those agents.
+ * Otherwise it is every registered directory, each agent's home config directory, the current directory, and every project the agents' own project logs list, so installs made before the registry existed are reached on any machine; --agent narrows it to those agents.
  */
 function selectTargets(args: Args): TargetSelection {
   if (stringFlag(args, 'dir') !== undefined || boolFlag(args, 'global', 'g')) {
@@ -195,9 +198,14 @@ function selectTargets(args: Args): TargetSelection {
     { agent, root: targetRoot(agent, { global: true }) },
     { agent, root: targetRoot(agent) },
   ])
+  const logged = targetsInProjectLogs(
+    projectLogFiles(os.homedir(), (agent) =>
+      targetRoot(agent, { global: true }),
+    ),
+  ).filter((target) => wanted.has(target.agent.id))
   return {
-    targets: dedupeTargets([...registered, ...local]).filter((target) =>
-      hasInstalls(target.root),
+    targets: dedupeTargets([...registered, ...local, ...logged]).filter(
+      (target) => hasInstalls(target.root),
     ),
     forgotten: registered.filter((target) => !hasInstalls(target.root)),
   }
@@ -648,7 +656,8 @@ ${bold('Commands')}
   add <name...> | --all    Install skills and rules for the chosen agents
   update [name...]         Refresh installed entries against the catalog,
                            pulling first, in every location this CLI has
-                           installed into (--dir or -g limits it to one);
+                           installed into and every project Claude Code or
+                           Codex has run in (--dir or -g limits it to one);
                            adds nothing new, keeps each entry's copy/link
                            mode, skips what is current.
                            Reinstalls a stale CLI too (opt out: --no-self).

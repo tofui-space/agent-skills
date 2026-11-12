@@ -14,6 +14,10 @@ export const AGENTS: Record<AgentId, AgentDefinition> = {
     homeEnv: 'CLAUDE_CONFIG_DIR',
     configDir: '.claude',
     ruleDelivery: 'files',
+    projectLogs: [
+      { base: 'home', file: '.claude.json', format: 'json-projects' },
+      { base: 'config', file: '.claude.json', format: 'json-projects' },
+    ],
   },
   codex: {
     id: 'codex',
@@ -21,6 +25,9 @@ export const AGENTS: Record<AgentId, AgentDefinition> = {
     homeEnv: 'CODEX_HOME',
     configDir: '.codex',
     ruleDelivery: 'agents-md',
+    projectLogs: [
+      { base: 'config', file: 'config.toml', format: 'toml-projects' },
+    ],
   },
 }
 

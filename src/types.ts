@@ -51,6 +51,19 @@ export interface AgentDefinition {
   /** Directory name used both under the home directory and inside a project. */
   readonly configDir: string
   readonly ruleDelivery: RuleDelivery
+  /** Files in which the agent itself records every project directory it has run in. */
+  readonly projectLogs: readonly ProjectLog[]
+}
+
+/**
+ * One file listing project directories.
+ * `base` is the directory `file` resolves against: the user's home directory, or the agent's home config directory.
+ * `json-projects` reads the keys of a top-level `projects` object; `toml-projects` reads `[projects.'<dir>']` table headers.
+ */
+export interface ProjectLog {
+  readonly base: 'home' | 'config'
+  readonly file: string
+  readonly format: 'json-projects' | 'toml-projects'
 }
 
 export interface ManifestEntry {

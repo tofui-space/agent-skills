@@ -6,9 +6,12 @@ import { AGENTS } from '../src/agents.ts'
 import { writeManifest } from '../src/install.ts'
 import {
   dedupeTargets,
+  projectLogFiles,
+  readProjectLog,
   readRegistry,
   recordTarget,
   scanForTargets,
+  targetsInProjectLogs,
   writeRegistry,
 } from '../src/registry.ts'
 import type { Manifest } from '../src/types.ts'
@@ -134,6 +137,90 @@ describe('dedupeTargets', () => {
       { agent: AGENTS.claude, root: path.join(root, '..', '.claude') },
     ])
     assert.equal(targets.length, 1)
+  })
+})
+
+describe('readProjectLog', () => {
+  test('reads the keys of the projects object in a JSON log', () => {
+    const file = writeFile(
+      path.join(temp('log'), '.claude.json'),
+      JSON.stringify({ projects: { '/a/one': {}, '/b/two': {} }, other: 1 }),
+    )
+    assert.deepEqual(readProjectLog(file, 'json-projects'), [
+      '/a/one',
+      '/b/two',
+    ])
+  })
+
+  test('reads literal and basic quoted project headers in a TOML log', () => {
+    const file = writeFile(
+      path.join(temp('log'), 'config.toml'),
+      [
+        'model = "x"',
+        "[projects.'c:\\work\\one']",
+        'trust_level = "trusted"',
+        '[projects."c:\\\\work\\\\two"]',
+        '[profiles.default]',
+        "  [projects.'/home/three']  ",
+      ].join('\r\n'),
+    )
+    assert.deepEqual(readProjectLog(file, 'toml-projects'), [
+      'c:\\work\\one',
+      'c:\\work\\two',
+      '/home/three',
+    ])
+  })
+
+  test('reads a missing, malformed or projectless log as empty', () => {
+    const dir = temp('log')
+    assert.deepEqual(
+      readProjectLog(path.join(dir, 'missing.json'), 'json-projects'),
+      [],
+    )
+    const bad = writeFile(path.join(dir, 'bad.json'), '{ not json')
+    assert.deepEqual(readProjectLog(bad, 'json-projects'), [])
+    const none = writeFile(path.join(dir, 'none.json'), '{"projects": []}')
+    assert.deepEqual(readProjectLog(none, 'json-projects'), [])
+  })
+})
+
+describe('targetsInProjectLogs', () => {
+  test('finds installs of every agent in each logged project', () => {
+    const projects = temp('projects')
+    const one = path.join(projects, 'one')
+    const two = path.join(projects, 'two')
+    writeManifest(path.join(one, '.claude'), oneEntry())
+    writeManifest(path.join(one, '.codex'), oneEntry())
+    fs.mkdirSync(path.join(two, '.claude'), { recursive: true })
+    const log = writeFile(
+      path.join(temp('log'), '.claude.json'),
+      JSON.stringify({
+        projects: { [one]: {}, [two]: {}, [path.join(projects, 'gone')]: {} },
+      }),
+    )
+
+    const found = targetsInProjectLogs([
+      { file: log, format: 'json-projects' },
+      { file: log, format: 'json-projects' },
+    ]).map((target) => [target.agent.id, target.root])
+
+    assert.deepEqual(found, [
+      ['claude', path.join(one, '.claude')],
+      ['codex', path.join(one, '.codex')],
+    ])
+  })
+})
+
+describe('projectLogFiles', () => {
+  test('resolves each log against home or the agent config directory', () => {
+    const files = projectLogFiles('/home/u', (agent) =>
+      path.join('/cfg', agent.id),
+    ).map((log) => log.file)
+    assert.deepEqual(files, [
+      path.join('/home/u', '.claude.json'),
+      path.join('/cfg/claude', '.claude.json'),
+      path.join('/cfg/codex', 'config.toml'),
+    ])
   })
 })
 
