@@ -9,7 +9,7 @@
 
 In this file, **Source:** marks what the code or docs say, and **Inference:** marks reasoning that goes beyond them.
 
-Everything after the next section describes 0.22.3. The next section records what changed in 0.23.2 and which rule and skill statements it moved.
+Everything after the next two sections describes 0.22.3. The next section records what changed in 0.23.2 and which rule and skill statements it moved, and the one after it does the same for 0.23.4.
 
 ## 0.23.2 re-verification (2026-11-06)
 
@@ -46,6 +46,43 @@ Everything after the next section describes 0.22.3. The next section records wha
 **Unchanged, re-read at 0.23.2.** Background sync conditions and `NO_BG_TASKS` (`setup.rs:201-226`; dispatch in `lib.rs:844-925`); `--json` still suppresses it. Agent detection variables (`crates/but-utils/src/detect_agent.rs:20-27, 233-242`); silent skill overwrite and instruction-file cleanup (`command/skill/freshness.rs:61-97`; `command/agent/cleanup.rs:39-66`); `CLAUDE_CONFIG_DIR` is still never read. Hunk ID hashing and the `#<index>-<count>` collision suffix (`id/mod.rs`, `assign_content_based_hunk_ids`). Refusal texts `conflicts with commits on … (edits touch the same file)` and `… depends on … (…)` (`utils/rejection.rs:258, 270`). `Snapshot ID:` output (`command/legacy/oplog.rs:362`) and `oplog restore` with no prompt. `branch list --review` and `branch show --review` read the forge cache only (`list.rs:34`, `show.rs:46`); `--check` is an in-memory merge. `status -r` queries the forge (`status/mod.rs:570`). `pull --check` and `push --dry-run` fetch first, `pull --check` only when the target has an upstream (`pull/mod.rs:149-157`; `push.rs:186`). `Uncommitted files would be overwritten by checkout` (`crates/but-core/src/worktree/checkout/function.rs:160`).
 
 **Not re-established.** Every live probe below ran on 0.22.3. The dependency refusals, path selectors, ID lifetime across commits, and everything in `recovering.md` need the probe scripts re-run on 0.23.2 by a person, since they write.
+
+## 0.23.4 re-read (2026-11-12)
+
+| | |
+|---|---|
+| Installed `but` | **0.23.4** on Windows. `but --version` printed `but 0.23.4` after the user copied the MSI's `but.exe` over an older copy on `PATH`. |
+| Source | Tags `release/0.23.2` and `release/0.23.4`, GitHub tarballs, `crates/` only, compared with `diff -u`. Paths are at 0.23.4 under `crates/but/src/` unless they name another crate. |
+| Method | A diff pass went through thirteen claims from the rule. Every row below marked **Confirmed** was then re-read at the cited lines, separately from that pass. Rows marked **Reported** come from the diff pass only. |
+| Scope | Only the commands the rule's per-project opt-ins cover, plus what they depend on: selectors, background sync, aliases, the oplog. The Allowed list was not re-read. |
+
+| Change | Source | Status | Moved |
+|---|---|---|---|
+| A selector word can name a directory without a trailing `/`. A path relative to the directory `but` runs in, or an absolute path, also resolves. `.` at the checkout root resolves to the empty prefix, which matches every uncommitted hunk. | `id/mod.rs:1246-1271, 1601-1616`, prefix match at `1206`; `utils/change_source.rs:95-97` | Confirmed | Rule, reading output and the commit opt-in. §8's inference that `./src/lib.rs` or an absolute path does not match is outdated. |
+| `but commit` runs the pre-commit, commit-msg and post-commit hooks by default, for changes from the main worktree only. After pre-commit, a file selected whole is committed as the hook left it, and commit-msg can rewrite the message. `-n`, `--no-hooks` and `--no-verify` skip the hooks. | `args/commit.rs:119-122`; `command/legacy/commit.rs:167-180, 461-469, 587-599` | Confirmed | Rule, the commit opt-in and Do not self-authorize |
+| `but commit -s` / `--switch` switches to the target branch instead of staying in the workspace. | `args/commit.rs:128-130` | Confirmed | Rule, Do not self-authorize |
+| `-b` naming an applied branch commits at that branch's tip. | `command/legacy/commit.rs:704-717` | Confirmed | Rule, the commit opt-in |
+| `-b` refuses an unapplied branch, a name that exists as `<remote>/<name>`, and a name that nests with another ref. | `args/atoms/branch_arg.rs` | Reported | none |
+| `but amend --target` is optional. Without it, the changes go to the newest commit of the branch checked out where they are, or of the only applied branch. Several candidates are refused. With no sources, every uncommitted change of the checkout is amended. | `args/amend.rs:20-31`; `command/legacy/amend.rs:66-67, 175-207` | Confirmed | Rule, history edits |
+| `but unapply` first commits the branch's assigned uncommitted changes as a "WIP Assignments" commit on that branch. Hunks it cannot commit only log a warning. | CLI `command/legacy/unapply.rs:179` → `but-api/src/legacy/virtual_branches.rs:374, 429, 451, 540-575` | Confirmed | Rule, Never run and apply/unapply |
+| The CLI unapplies with `PreventUnnecessaryWorkspaceReferencesKeepWorkspaceCommit`. When one branch remains, that branch is checked out and `gitbutler/workspace` is removed. When none remains, the local target is checked out. | `but-api/src/legacy/virtual_branches.rs:457-464`; `but-workspace/src/branch/unapply.rs:105-111, 165-173, 211-227` | Confirmed. The diff pass reports the one-lane collapse at 0.23.2 too (old `unapply.rs:839`); that was not re-read. | Rule, apply/unapply |
+| `but push <branch>` pushes that branch and every branch below it in its stack, skipping those already integrated or with nothing to push, one push each. It refuses a branch built on the workspace commit. | `but-workspace/src/legacy/push.rs:40-50, 76, 184-220, 226-244`; file identical to 0.23.2 | Confirmed | Rule, push opt-in |
+| Force-push protection means `--force-with-lease`, plus `--force-if-includes` except for deletions. Without protection the push uses `--force`. | `gitbutler-git/src/repository.rs:588-599` | Confirmed | Rule, push opt-in |
+| Materializing a rewrite now lets uncommitted changes in linked worktrees conflict with the new head, where 0.23.2 refused. For the main checkout this was already allowed at 0.23.2. | `but-rebase/src/graph_rebase/materialize.rs:304` (old `:305` was `false`), `:322` (old `:320`, `true`); option meaning in `but-core/src/worktree/checkout/mod.rs:21-25` (doc comment, not executable) | Confirmed for the flag. What lands in the files was not read. | Rule, history edits |
+| `but --version` and `-V` print `but <version>` and return before alias expansion, agent detection, and project setup. A `--version` anywhere in the arguments does this. | `lib.rs:223-228` | Confirmed | Rule, Allowed, and the version check in the opt-in notice |
+| `but oplog restore` refuses when it would move a branch checked out in another worktree. | `gitbutler-oplog/src/oplog.rs:627-645, 1400-1419` | Confirmed | Rule, Never run |
+| Snapshots record branches checked out in linked worktrees. Ones an operation did not move are dropped when the snapshot is committed. | `gitbutler-oplog/src/oplog.rs`, `without_worktree_branches_to_leave_alone` | Reported | none |
+| `but pull` prunes every remote after a successful update. | `command/legacy/pull/mod.rs:562-565` | Confirmed | Rule, Never run |
+| squash moves the squashed commits next to the target, rebases, and refuses on conflict; it refuses a squash into itself and `-t <empty branch>`. uncommit and squash into `@` refuse only on newly conflicted commits. absorb applies all amends in one materialize. | `command/legacy/squash.rs:543, 691, 829, 1126`; `squash_commits.rs:145-215`; but-api `legacy/absorb.rs` | Reported | none |
+| New flags: `reword -F <file\|->`, `show --stat`, `diff --stat` with several targets. `merge` resolves its argument as a CLI ID. No subcommand was removed or renamed. | `args/` | Reported | none |
+| Unchanged: background sync and `NO_BG_TASKS` (`setup.rs:212-238`), registration and target inference (`setup.rs:159-185`), skill freshness and install paths (`command/skill/` identical), built-in aliases (`alias.rs` identical), the merged-upstream guard's call sites, the dependency refusal texts and `--above` hints. | as cited | Reported | none |
+
+**Not established at 0.23.4.**
+- Whether a manual snapshot still becomes `but undo`'s next target. `get_undo_target_snapshot` is not in the diff and was not opened.
+- Whether unapply still refuses when uncommitted changes overlap and the workspace collapses. 0.23.2 refused (old `unapply.rs:790-794`).
+- What a conflicted linked-worktree checkout leaves in the files.
+
+**Never opened:** the TUI, `but-transaction`'s `lib.rs`, `but-hunk-assignment`, `gitbutler-branch-actions`, the forge crates, and all tests.
 
 ## Summary
 
