@@ -75,6 +75,8 @@ Catalog resolution order is `--from` → env → enclosing checkout → `~/.cach
 
 `<config>/.tofui-skills.json` records what the CLI installed, one manifest per agent. Anything not in it is treated as hand-written and skipped rather than overwritten unless `--force` is passed; preserve that behavior. For a rule folded into `AGENTS.md` the manifest is the *only* evidence of presence, since every rule shares one file — that is why `inspect` consults the manifest instead of the filesystem for those entries.
 
+`<cache>/installs.json` (`src/registry.ts`) lists every config directory holding a manifest with entries, so `update` and `status` reach every install, not only the current directory. `add`, `update` and `remove` keep it in step through `saveTarget`; `update` forgets directories whose manifest is empty; `scan <dir>` registers installs made before the registry existed. With `--dir` or `-g` both commands act on that one location instead. The registry functions take the file path as an argument, so tests pass a temp file and never touch the real one.
+
 `install` and `uninstall` return `null` rather than a path when an entry is delivered through `AGENTS.md`; callers must then call `syncAgentsFile` with `trackedRules(manifest, catalog.rules)`. Passing the whole `Catalog` there typechecks as an error but would only fail at runtime, so keep `pnpm typecheck` in the loop.
 
 This machine sets `CLAUDE_CONFIG_DIR` to `~/.claude-personal`. That directory also holds third-party skills installed via the separate `skills` CLI and tracked in `~/.agents/.skill-lock.json` — only entries present in this repo are authored here.

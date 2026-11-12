@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
-import { AGENT_IDS, parseAgents } from './agents.ts'
+import { AGENT_IDS, AGENTS, parseAgents } from './agents.ts'
 import { loadCatalog, selectEntries } from './catalog.ts'
 import {
   agentsFileFor,
@@ -18,6 +18,16 @@ import {
   writeManifest,
 } from './install.ts'
 import {
+  dedupeTargets,
+  hasInstalls,
+  readRegistry,
+  recordTarget,
+  registryFile,
+  sameTarget,
+  scanForTargets,
+  type Target,
+} from './registry.ts'
+import {
   cacheHeadCommit,
   DEFAULT_REPO,
   describeCache,
@@ -32,11 +42,12 @@ import type {
   Catalog,
   CatalogEntry,
   InstallMode,
+  Manifest,
   ResolvedSource,
 } from './types.ts'
 
 /** Flags that consume the following argument; every other flag is boolean. */
-const VALUE_FLAGS = new Set(['from', 'repo', 'ref', 'dir', 'agent'])
+const VALUE_FLAGS = new Set(['from', 'repo', 'ref', 'dir', 'agent', 'depth'])
 
 interface Args {
   readonly command: string
@@ -140,6 +151,61 @@ function rootFor(args: Args, agent: AgentDefinition): string {
   })
 }
 
+/** Writes the manifest and keeps the install registry in step with it. */
+function saveTarget(
+  agent: AgentDefinition,
+  root: string,
+  manifest: Manifest,
+): void {
+  writeManifest(root, manifest)
+  recordTarget(registryFile(), { agent, root })
+}
+
+interface TargetSelection {
+  readonly targets: readonly Target[]
+  /** Registered directories whose manifest no longer tracks anything. */
+  readonly forgotten: readonly Target[]
+}
+
+/**
+ * The config directories `update` and `status` act on.
+ * With --dir or --global it is that one location per chosen agent, as for `add`.
+ * Otherwise it is every registered directory, plus each agent's home config directory and the current directory, so installs made before the registry existed are reached too; --agent narrows it to those agents.
+ */
+function selectTargets(args: Args): TargetSelection {
+  if (stringFlag(args, 'dir') !== undefined || boolFlag(args, 'global', 'g')) {
+    return {
+      targets: agentsFrom(args).map((agent) => ({
+        agent,
+        root: rootFor(args, agent),
+      })),
+      forgotten: [],
+    }
+  }
+
+  const agents =
+    stringFlag(args, 'agent') === undefined
+      ? AGENT_IDS.map((id) => AGENTS[id])
+      : agentsFrom(args)
+  const wanted = new Set(agents.map((agent) => agent.id))
+  const registered = readRegistry(registryFile()).filter((target) =>
+    wanted.has(target.agent.id),
+  )
+  const local = agents.flatMap((agent) => [
+    { agent, root: targetRoot(agent, { global: true }) },
+    { agent, root: targetRoot(agent) },
+  ])
+  return {
+    targets: dedupeTargets([...registered, ...local]).filter((target) =>
+      hasInstalls(target.root),
+    ),
+    forgotten: registered.filter((target) => !hasInstalls(target.root)),
+  }
+}
+
+const NOTHING_KNOWN =
+  'Nothing installed anywhere this CLI knows of. `tofui-skills scan <dir>` finds installs made before it kept a registry.'
+
 function describeEntry(entry: CatalogEntry): string {
   if (entry.type === 'skill') {
     const group = entry.category ? dim(` (${entry.category})`) : ''
@@ -225,7 +291,7 @@ function commandAdd(args: Args): void {
       installed += 1
     }
 
-    writeManifest(root, manifest)
+    saveTarget(agent, root, manifest)
     if (agent.ruleDelivery === 'agents-md') {
       const file = agentsFileFor(root)
       syncAgentsFile(file, trackedRules(manifest, catalog.rules))
@@ -369,8 +435,11 @@ function commandUpdate(args: Args): void {
   let updated = 0
   let current = 0
 
-  for (const agent of agentsFrom(args)) {
-    const root = rootFor(args, agent)
+  const selection = selectTargets(args)
+  if (selection.targets.length === 0 && selection.forgotten.length === 0)
+    console.log(`\n${NOTHING_KNOWN}`)
+
+  for (const { agent, root } of selection.targets) {
     const manifest = readManifest(root)
     console.log(`\n${bold(agent.label)} ${dim(root)}`)
 
@@ -416,7 +485,7 @@ function commandUpdate(args: Args): void {
       updated += 1
     }
 
-    if (!dryRun) writeManifest(root, manifest)
+    if (!dryRun) saveTarget(agent, root, manifest)
     if (agent.ruleDelivery === 'agents-md') {
       const tracked = trackedRules(manifest, catalog.rules)
       if (tracked.length > 0) {
@@ -430,6 +499,15 @@ function commandUpdate(args: Args): void {
         }
       }
     }
+  }
+
+  for (const target of selection.forgotten) {
+    if (!dryRun) recordTarget(registryFile(), target)
+    console.log(
+      dim(
+        `\n${dryRun ? 'would forget' : 'forgot'} ${target.root} (${target.agent.label}): nothing installed there any more`,
+      ),
+    )
   }
 
   console.log(
@@ -466,7 +544,7 @@ function commandRemove(args: Args): void {
       console.log(`  removed ${entry.type} ${entry.id}`)
     }
 
-    writeManifest(root, manifest)
+    saveTarget(agent, root, manifest)
     if (agent.ruleDelivery === 'agents-md') {
       syncAgentsFile(agentsFileFor(root), trackedRules(manifest, catalog.rules))
     }
@@ -507,8 +585,9 @@ function commandStatus(args: Args): void {
     `  ${count(catalog.skills.length, 'skill')}, ${count(catalog.rules.length, 'rule')}`,
   )
 
-  for (const agent of agentsFrom(args)) {
-    const root = rootFor(args, agent)
+  const selection = selectTargets(args)
+  if (selection.targets.length === 0) console.log(`\n${NOTHING_KNOWN}`)
+  for (const { agent, root } of selection.targets) {
     const entries = Object.values(readManifest(root).entries)
     console.log(`\n${bold(`installed — ${agent.label}`)}`)
     console.log(`  ${root}`)
@@ -519,6 +598,43 @@ function commandStatus(args: Args): void {
       )
     }
   }
+  for (const target of selection.forgotten) {
+    console.log(
+      dim(
+        `\nregistered but empty: ${target.root} (${target.agent.label}); \`update\` forgets it`,
+      ),
+    )
+  }
+}
+
+/**
+ * Registers installs this CLI made before it kept a registry, by finding their manifests below each named directory.
+ * Searches the current directory when none is named.
+ */
+function commandScan(args: Args): void {
+  const starts = args.positionals.length ? args.positionals : [process.cwd()]
+  const depthFlag = stringFlag(args, 'depth')
+  const depth = depthFlag === undefined ? 4 : Number.parseInt(depthFlag, 10)
+  if (!Number.isInteger(depth) || depth < 0)
+    throw new Error('--depth takes a whole number of directory levels.')
+
+  const file = registryFile()
+  const known = readRegistry(file)
+  const found = scanForTargets(starts, depth)
+
+  let added = 0
+  for (const target of found) {
+    const isNew = !known.some((other) => sameTarget(other, target))
+    recordTarget(file, target)
+    console.log(
+      `  ${isNew ? 'new    ' : 'known  '} ${target.agent.label} ${dim(target.root)}`,
+    )
+    if (isNew) added += 1
+  }
+  console.log(
+    `\n${count(found.length, 'install location')} found, ${added} newly registered.`,
+  )
+  console.log(dim(`registry: ${file}`))
 }
 
 function commandHelp(): void {
@@ -531,14 +647,19 @@ ${bold('Commands')}
   list                     Show every skill and rule in the catalog
   add <name...> | --all    Install skills and rules for the chosen agents
   update [name...]         Refresh installed entries against the catalog,
-                           pulling first; adds nothing new, keeps each
-                           entry's copy/link mode, skips what is current.
+                           pulling first, in every location this CLI has
+                           installed into (--dir or -g limits it to one);
+                           adds nothing new, keeps each entry's copy/link
+                           mode, skips what is current.
                            Reinstalls a stale CLI too (opt out: --no-self).
                            Add --dry-run to preview the status, changing nothing
   self-update              Reinstall the global CLI from the remote
   remove <name...>         Remove previously installed entries
   sync | pull              Clone or fast-forward the catalog from the remote
-  status                   Show remote, cache, active catalog and installs
+  status                   Show remote, cache, active catalog, and installs
+                           in every known location
+  scan [dir...]            Register installs made before the CLI kept a
+                           registry, searching below each dir (default: .)
 
 ${bold('Options')}
       --agent <list>       ${AGENT_IDS.join(', ')} or all (default claude)
@@ -551,6 +672,7 @@ ${bold('Options')}
       --repo <url>         Override the remote (default ${DEFAULT_REPO})
       --ref <ref>          Sync a branch or tag instead of the default head
       --skills / --rules   Restrict \`list\` to one kind
+      --depth <n>          (scan) Directory levels to search (default 4)
 
 ${bold('Where things land')}
   Claude Code   skills → .claude/skills/<name>/        catalog category dropped
@@ -567,7 +689,8 @@ ${bold('Where things land')}
 ${bold('Environment')}
   TOFUI_SKILLS_REPO        Default remote URL
   TOFUI_SKILLS_SOURCE      Default catalog directory
-  TOFUI_SKILLS_HOME        Cache location (default ~/.cache/tofui-skills)
+  TOFUI_SKILLS_HOME        Cache and install-registry location
+                           (default ~/.cache/tofui-skills)
 `)
 }
 
@@ -604,6 +727,9 @@ function main(): void {
       break
     case 'status':
       commandStatus(args)
+      break
+    case 'scan':
+      commandScan(args)
       break
     case 'help':
       commandHelp()
