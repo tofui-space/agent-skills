@@ -5,6 +5,7 @@
 - The **inventory** is the selected language tool that admits code and computes its checks.
 - A **check** is one computed input with its expected result. The tools print checks as "cases".
 - A **cell** is a set of inputs that the conditions of the code and of the spec cannot tell apart. One check per cell is enough, which is why cells are what gets counted.
+  For a text classifier and a classifier over several numbers the TypeScript tool adds inputs at each boundary, so its count is the cells plus those inputs.
 - A **unit** is one function or dispatch map that the tool admits.
 - The **obligations file** is the computed list of every unit with its checks. The project commits it.
 - **Paths** and **tests** are the words people arrive with. The answer to "how many tests does this need" is the number of checks, and it exists only for code in the shapes.

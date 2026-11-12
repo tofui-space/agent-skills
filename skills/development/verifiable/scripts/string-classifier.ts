@@ -30,7 +30,7 @@ import {
 
 const conditions = `startsWith, endsWith, includes, === 'literal', .length and .split('c').length compared with an integer, and /pattern/.test(<input>) with ${regexSubset}`
 const statements =
-  "an undefined guard first, const x = input.slice(n) or input.slice(n, -m), if (<condition>) return '<literal>', and a final return of a literal or <condition> ? '<a>' : '<b>'"
+  "an undefined guard first, const x = input.slice(n) or input.slice(n, -m), if (<condition>) return '<literal>', and a final return of a literal, a condition, or <condition> ? '<a>' : '<b>'"
 
 const not = (smt: string) => `(not ${smt})`
 const anything = '(re.* re.allchar)'

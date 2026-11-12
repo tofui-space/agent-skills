@@ -58,6 +58,8 @@ node <skill>/scripts/inventory.ts --root=<project> [--check] [--out=<file>] [--m
 Reads the code under the claim and its specs, and writes the obligations file. Lines it prints:
 
 - `<kind> <unit> <n> cases`: one per admitted unit, then `total`. A unit whose file or spec has a `REJECTED` line is printed as `not counted`, and the total then reads `total, admitted units only`.
+  The obligations file still holds the checks of such a unit, unmarked, and the driver runs them.
+  A text, `unknown` or several-numbers classifier whose code or spec the tool could not read has only its `REJECTED` lines: it is not in this list and not in the file.
 - `REJECTED <file>:<line> <rule>; found: <text>`: something the tool does not admit. Exit code 1.
 - `ASSUMES <file> <unit>: <text>`: an assumption the count rests on, such as a plain `number` input being a whole number. Report it.
 - `UNSETTLED <spec file> <unit>: <text>`: a point of the requirement that the spec's `unsettled` export lists. Report it.
@@ -66,7 +68,9 @@ Reads the code under the claim and its specs, and writes the obligations file. L
 
 `--out=<file>` writes the list somewhere else and leaves the project's obligations file alone. The solver cache is still written under the project (the `cache` setting); it holds answers, no source.
 
-Every unit needs its spec with the exports its shape requires; a missing spec or export is a `REJECTED` line that names the file and the exports. A rejection that says cells "came back unknown from the solver" blocks the claim for that unit: the solver ran out of its time limit per question (20 seconds; `VERIFIABLE_QUERY_MS` changes it). Simplify the unit's conditions or split the unit; do not treat unknown as feasible or infeasible.
+Every unit needs its spec with the exports its shape requires; a missing spec or export is a `REJECTED` line that names the file and the exports.
+The exception is `reviewedDomain` beside `otherwise` in a decision table, which only the driver reads.
+A rejection that says cells "came back unknown from the solver" blocks the claim for that unit: the solver ran out of its time limit per question (20 seconds; `VERIFIABLE_QUERY_MS` changes it). Simplify the unit's conditions or split the unit; do not treat unknown as feasible or infeasible.
 
 The first run of a text classifier can take minutes. The answers are cached per solver version.
 

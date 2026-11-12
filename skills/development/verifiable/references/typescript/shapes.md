@@ -16,7 +16,9 @@ Read this before you reshape code or write a spec. Every rule here is one the in
 ## Rules for all code under the claim
 
 - **A file is in one shape, decided by its path.** The shape globs are in the project's settings. A file under the claim that matches no shape may hold types, imports and re-exports only. A file of re-exports is how a reshaped module keeps its public path: the old file re-exports the handler from its new place.
-- **Every input gets its own type.** Two inputs of one type can be swapped and the code still compiles, so the tool rejects them. Use distinct literal unions (`'onTime' | 'overdue'`) and branded types for numbers and text (`number & { readonly brand: 'DueDay' }`).
+- **Every input gets its own type.** Two inputs of one type can be swapped and the code still compiles, so the tool rejects them.
+  For a decision the tool compares the values and not the type names: it rejects two inputs that take the same set of values, which includes two `boolean` inputs, two fields of one object parameter, and two enums with the same member values.
+  Use distinct literal unions (`'onTime' | 'overdue'`) and branded types for numbers and text (`number & { readonly brand: 'DueDay' }`).
 - **No cast and no non-null assertion.** The counts rest on the types. A branded value comes into being in two ways only: a classifier that returns a type predicate, or the one cast a conversion may hold.
 - **Unit names are unique**, because a spec is found by the name of its unit.
 
@@ -24,10 +26,12 @@ Read this before you reshape code or write a spec. Every rule here is one the in
 
 A pure function from finite inputs to a finite result.
 
-- **May contain:** `if`, `switch`, `?:`, `&&`, `||`, comparisons with literals, returns of literals.
-- **May not contain:** loops, `try`, `await`, calls, computed access, `this`, assignment, or a read of anything declared outside the function.
-- **Inputs:** positional parameters, or one object parameter. Each is a union of literals, a boolean, or an object of such values (up to three levels). A tagged union with finite payloads counts.
-- **Result:** a union of literals.
+- **Written with:** `if`, `switch`, `?:`, `&&`, `||`, comparisons with literals, returns of literals.
+  This line is advice and not a rule: the inventory tests a body against the next line only, so it also admits other constructs, such as a local `const` or `let`, `!`, `typeof`, `??`, `throw`, and a comparison of two inputs.
+- **May not contain:** loops, `try`, `await`, calls, `new`, computed access, `this`, assignment, `++` and `--`, or a read of anything declared outside the function.
+- **Inputs:** positional parameters, or one object parameter. Each is a union of string literals, a boolean, or an object of such values (up to three levels). A tagged union with finite payloads counts.
+  Number literals, `null`, `undefined` and optional parameters are rejected as not finite.
+- **Result:** a union of string literals, a boolean, or an object of such values.
 - **What the tool computes:** every combination of input values. The number of checks is the product of the value counts. More than 4096 is rejected: split the decision in two, joined by an intermediate finite type.
 
 **Spec:** a table.
@@ -55,11 +59,15 @@ export const reviewedDomain = {
 export const rows = [{ input: { copy: 'lending', renewals: 'notRenewed' }, outcome: 'renew' }]
 ```
 
+The inventory does not test for `reviewedDomain`: without it the unit is counted, and its computed check then fails with a `TypeError` that does not name the export.
+
 ## Classifier
 
-The only place where a number, a text or an `unknown` value becomes a finite value. Statements are `if (<condition>) return <literal>` and one final `return` of a literal, of `<condition> ? <a> : <b>`, or of a condition. There are four kinds, chosen by the parameter types. A classifier of any kind may return a type predicate (`value is <BrandedType>`); its results are then `true` and `false`.
+The only place where a number, a text or an `unknown` value becomes a finite value. Statements are `if (<condition>) return <literal>` and one final `return` of a literal, of `<condition> ? <a> : <b>`, or of a condition. The inventory enforces this statement form for three of the four kinds below; for one number compared with literals it tests only how the parameter is used.
+There are four kinds, chosen by the parameter types. A classifier of any kind may return a type predicate (`value is <BrandedType>`); its results are then `true` and `false`.
 
 **One number compared with literals.** The spec is a table of intervals that covers every whole number exactly once; for a predicate the outcomes are `true` and `false`. The constants of the code and of the spec together cut the whole numbers into cells, and the tool checks one number per cell. Moving a boundary in the code changes the cells, which is why the stale check must run: against an old obligations file a moved boundary can pass. For a parameter typed plain `number` the inventory prints an `ASSUMES` line (it is a whole number); a value that may be a fraction or NaN needs a predicate in front.
+Write the constants as whole numbers: the inventory does not reject a constant such as `2.5` here, it writes fractions as inputs, and the computed check then fails.
 
 ```ts
 export const intervals = [
@@ -91,9 +99,11 @@ export function isDueDay(input: unknown): input is DueDay {
 }
 ```
 
-The spec is `expected(input: unknown)` in the same vocabulary. More than 4096 cells is rejected. Array elements are not covered. Comparison with a literal means `===` and `!==`; there is no `<` or `>` on an `unknown` value. "A whole number from 1 to 99" therefore takes two units, a predicate here that tests `Number.isSafeInteger` and a number classifier for the range, and two guards in the wiring.
+The spec is `expected(input: unknown)` in the same vocabulary. Array elements are not covered. Comparison with a literal means `===` and `!==`; there is no `<` or `>` on an `unknown` value. "A whole number from 1 to 99" therefore takes two units, a predicate here that tests `Number.isSafeInteger` and a number classifier for the range, and two guards in the wiring.
 
 **What the tool computes for the last three kinds:** every combination of true and false over the conditions of code and spec together that some input can reach, one input for each, plus inputs at each boundary. For text and several numbers a solver finds the inputs; an answer of unknown blocks the claim.
+Each of the three kinds takes at most 12 distinct conditions over code and spec together, and an `unknown` classifier at most 200,000 combinations of the properties it reads.
+Beyond either limit the inventory prints no `REJECTED` line: the whole run ends with an error message and a stack trace, exit code 1, no list of units, and no obligations file written.
 
 ## Adapter
 

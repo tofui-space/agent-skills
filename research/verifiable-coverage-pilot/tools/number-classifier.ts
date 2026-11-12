@@ -16,7 +16,7 @@ import {
 const conditions =
   'comparisons (< <= > >= === !==) between sums and differences of the inputs and integer literals, <input> === undefined for an input that may be undefined, joined by && || !'
 const statements =
-  "if (<condition>) return '<literal>', and a final return of a literal or <condition> ? '<a>' : '<b>'"
+  "if (<condition>) return '<literal>', and a final return of a literal, a condition, or <condition> ? '<a>' : '<b>'"
 
 type Arguments = ReadonlyArray<number | null>
 type Linear = {

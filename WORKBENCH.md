@@ -520,7 +520,7 @@ On-demand audit of accumulated context: the conversation, earlier transcripts, p
 
 ### verifiable
 
-`development` - C# backend landed 2026-11-11 as c850b39 - enum decisions and guidance landed 2026-11-12 as d37fb8a - records and the enum-result correction drafted 2026-11-12, uncommitted
+`development` - C# backend landed 2026-11-11 as c850b39 - enum decisions and guidance landed 2026-11-12 as d37fb8a - records and the enum-result correction landed 2026-11-12 as 60c8dfe (merge 2df41fd) - TypeScript tools on Windows landed 2026-11-12 as 21c6170, with the reference corrections in the commit after it
 
 **Scope:** one shared assurance workflow with language-specific references and capability
 reporting. Existing TypeScript executable paths remain valid. C# starts with a standalone
@@ -588,5 +588,22 @@ Not run: evals 3 to 7, description optimization.
 
 **Size (2026-11-12, records):** body 1,252 words; description 90 words. Privacy scan: zero errors.
 
-**Left:** commit the records stage and the enum-result correction together; the gap stays on `origin/main` until then.
-The Windows failures of the TypeScript tools are a separate fix and are not part of this stage.
+**TypeScript tools on Windows and reference corrections (2026-11-12):** the 56 of 82 recorded above was measured in a copy outside the repository, and two groups of its failures were artefacts of that copy.
+The four Vitest start-up errors came from a path of 261 characters, and a second group from a package install that had lost files; neither occurs in the checkout.
+Two defects were real and are fixed.
+The tools printed and stored paths with the separator of the operating system; every path now goes through `project.path`, so lines and the `file` fields of an obligations file use forward slashes everywhere, and `loadContracts` takes the project.
+`reconcile.ts` named its helper modules by plain paths, which Node refuses on Windows (`Received protocol 'c:'`), and its generated Vitest config looked modules up by an id with the other slashes; modules are now named by file URL and the id is normalised.
+An obligations file written on Windows before this fix holds backslashes and shows as `STALE` once.
+Tool suite in the checkout on Windows: 86 of 86, with four tests added for path messages that nothing pinned; pilot checks 31 of 31.
+On Linux in a `node:24` container: 80 of 82 before and after the change, the same two tests failing because Vitest printed colour codes there; 86 of 86 for the final state with `NO_COLOR=1`.
+Each edit was undone on its own on Windows: every one fails a test except two that are recorded with their reason in the review file.
+Found and not caused by this change: the pilot's stored `obligations.json` is `STALE` on both systems, because the solver chose other inputs for four units and one count is 203 where 195 is stored; `tooltest/prune-plan.test.ts` fails the formatter.
+A separate confirmer then checked the ten differences between the TypeScript references and the code that `research/verifiable-typescript-cell-model.md` lists: 5 confirmed, 5 narrower, none refuted.
+The references now say what the inventory does, as `references/typescript/shapes.md` itself rules; the help text of two classifier kinds names the bare-condition return.
+Decided, and not to be reopened as wording: four of the ten are defects of the tools and not of the text, and they are stated in the references, not fixed.
+They are a decision table with `otherwise` and no `reviewedDomain` (counted, then a `TypeError` in the check), a fraction constant in a single-number classifier (admitted, then a failing check), two limits that end the run with a stack trace instead of a `REJECTED` line, and rejected units whose checks stay in the obligations file and run green.
+Not run: evals, description optimization, macOS.
+
+**Size (2026-11-12, TypeScript corrections):** the skill body and description are unchanged. Privacy scan: zero errors. Skill validation passes.
+
+**Left:** decide which of the four tool defects to fix in code.
