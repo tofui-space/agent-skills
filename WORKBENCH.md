@@ -520,11 +520,11 @@ On-demand audit of accumulated context: the conversation, earlier transcripts, p
 
 ### verifiable
 
-`development` - C# backend landed 2026-11-11 as c850b39 - enum decisions and guidance landed 2026-11-12 as d37fb8a - records and the enum-result correction landed 2026-11-12 as 60c8dfe (merge 2df41fd) - TypeScript tools on Windows landed 2026-11-12 as 21c6170, with the reference corrections in the commit after it
+`development` - C# backend landed 2026-11-11 as c850b39 - enum decisions and guidance landed 2026-11-12 as d37fb8a - records and the enum-result correction landed 2026-11-12 as 60c8dfe (merge 2df41fd) - TypeScript tools on Windows landed 2026-11-12 as 21c6170, with the reference corrections in the commit after it - integer ranges and strings in C# decisions landed 2026-11-14
 
 **Scope:** one shared assurance workflow with language-specific references and capability
 reporting. Existing TypeScript executable paths remain valid. C# starts with a standalone
-Roslyn checker for decisions over `bool` values, enums and records of them; project loading, other shapes, library contracts,
+Roslyn checker for decisions over `bool` values, enums, integers and strings compared with constants, and records of them; project loading, other shapes, library contracts,
 reconciliation, pruning and Stryker.NET integration remain unsupported.
 
 **Validation:** stable .NET 10 build and ten C# backend regressions passed in the expansion.
@@ -576,7 +576,7 @@ Decided and not to be reopened without new evidence: no record classes, plain `r
 An independent reader then found a gap in the enum stage landed as d37fb8a: a method could return an enum input unchanged, and two methods returning different unnamed values passed the same complete spec, because every unnamed cell is tried with one representative.
 Corrected, and not to be widened without splitting the unnamed cell first: an enum input is admitted only in `==` or `!=` with a named member and as the input of `is` or `switch`; an enum result is always a named member; `#unnamed` is not an outcome.
 Obligations are schema `verifiable.csharp/4`, backend `csharp-decision-v3`; earlier artifacts show as stale.
-Stated in the references and not fixed in code: a `bool` with a stored byte other than 0 or 1, made by reinterpreting memory, is outside every claim; an expression of about 3000 operands ends the tool with a stack overflow instead of a `REJECTED` line.
+Stated in the references and not fixed in code: a `bool` with a stored byte other than 0 or 1, made by reinterpreting memory, is outside every claim; a very long expression ends the tool with a stack overflow instead of a `REJECTED` line (3000 operands in the run of that stage; the sizes measured later are in the 2026-11-13 paragraph below).
 Declined: a depth limit for that case, because a crash prints no verdict and a limit needs its own boundary tests.
 The reader checked 76 statements of the references by reading and by runs: 61 supported, 8 narrower, 2 contradicted (the gap above), 5 instructions; all ten are corrected.
 It made 100 attempts to break the cell claim and 49 malformed specs; apart from the findings above none violated it.
@@ -606,4 +606,25 @@ Not run: evals, description optimization, macOS.
 
 **Size (2026-11-12, TypeScript corrections):** the skill body and description are unchanged. Privacy scan: zero errors. Skill validation passes.
 
-**Left:** decide which of the four tool defects to fix in code.
+**Integer ranges and strings in C# decisions (2026-11-13):** the checker admits `sbyte` to `ulong` and `string` as parameters and record fields, where the code compares them with compile-time constants: `<`, `<=`, `>`, `>=`, `==`, `!=` in either order, and relational and constant patterns.
+A spec states the cells of such an input under a new `domains` key: ranges that cover the integer type once, or a list of strings, which also gets the cells `#null` and `#other`.
+The tool splits the spec's ranges at every value where a comparison of the code changes its answer and tries both ends of each piece; for a string it tries the listed strings, `null`, every code constant the spec does not list, the empty string and constants with their ASCII case swapped.
+No solver is used: the claim rests on admitted code doing nothing with such an input but compare it with constants, which is item 21 of section (e) of `research/verifiable-csharp-domains.md`, an inference.
+Decided and not to be reopened without new evidence: the cells come from the spec and never from `paths`, whose ranges are read from the code; no arithmetic, casts, comparison of two inputs, string members, integer or string results, `char`, `nint`, floating point, `decimal` or nullable forms; a string constant with an unpaired surrogate is rejected; a string spelled `#null` or `#other` cannot have a row of its own.
+Obligations are schema `verifiable.csharp/5`, backend `csharp-decision-v4`; earlier artifacts show as stale.
+Five rejection messages were reworded, and the limit of 4096 now counts checks and is reported after the body is read.
+Backend suite: 32 tests on SDK 10.0.400, Windows, debug build; 23 before this stage.
+The nine new tests compare 24 methods over all eight integer types, strings and a record with a reference at every check, plant 81 single faults that each fail a check, and reject 28 malformed `domains` and 40 sources with their reason.
+Each of 57 edits of the tool code was undone on its own: 53 fail a test, and the four that do not are guards for which no input was found, recorded in the review file.
+A separate confirmer tried to make the tool pass a method that disagrees with its spec: 3,497 admitted methods against its own evaluator, every value of the 8-bit and 16-bit types included, and no cell with two results; 32-bit and 64-bit inputs and strings were sampled.
+It found three defects of this stage, fixed before any commit: a range token that ended in a line feed was accepted, `paths` refused a constant spelled like a cell token, and a constant with half of a surrogate pair was written to the obligations file as another character.
+Stated in `references/csharp/setup.md` and not fixed, under the declined depth limit above: in the debug build 1,400 operands joined by `||` or `&&` are admitted and 1,600 end in a stack overflow, where the build of 60c8dfe handled about 1,700; 2,000 patterns joined by `or` are admitted and 2,400 are not; 1,000 `else if` branches or nested parentheses are admitted and 10,000 are not.
+The research for the next shape, a rule that computes a value from `double` and `int` fields, is in `research/verifiable-csharp-double-cells.md`; it lists the possible forms of a spec for a computed result and does not choose one.
+Decided 2026-11-14 for that shape: a spec states a computed result as one formula per cell in the tool's own small language (inputs, constants, `+ - * /`), which the tool parses and evaluates itself, as the TypeScript conversion shape does; it is form 3c in section (c) of that note.
+The formula cannot show that it was written independently of the code; that limit is accepted with the form.
+The depth limit was offered again on 2026-11-14 with the lower crash size and stays declined, for the reason given above.
+Not run: Linux, a release build, evals, description optimization.
+
+**Size (2026-11-13, integers and strings):** body 1,264 words; description 96 words and 626 characters. Privacy scan: zero errors. Skill validation passes.
+
+**Left:** build the per-entity rule with the chosen spec form; decide which of the four TypeScript tool defects to fix in code.

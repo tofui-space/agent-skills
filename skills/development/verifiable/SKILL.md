@@ -5,7 +5,7 @@ description: >-
   Use on /verifiable and its paths, coverage, mutation, prune and init commands, or when
   asked of TypeScript code which tests it needs, whether its checks can be counted, whether
   a suite is sufficient, or which existing tests actually guard behavior. For C#, only
-  standalone decision files over bool values, enums and records of them. Not for C# suite sufficiency, test strength or
+  standalone decision files over bool values, enums, integers and strings compared with constants, and records of them. Not for C# suite sufficiency, test strength or
   mutation questions, UI rendering, performance/load tests, other languages, or one quick
   test requested by name.
 ---
@@ -29,7 +29,7 @@ Resolve the target file and its owning project. Read only the corresponding prof
 | Target | Setup and capabilities | Executable scope |
 |---|---|---|
 | TypeScript | [typescript/setup.md](references/typescript/setup.md) | Existing five-shape tools; Node and Vitest runners |
-| C# | [csharp/setup.md](references/csharp/setup.md) | Standalone decisions over `bool`, enums and records of them only; no solution/project loading |
+| C# | [csharp/setup.md](references/csharp/setup.md) | Standalone decisions over `bool`, enums, integers and strings compared with constants, and records of them only; no solution/project loading |
 | Mixed repository | Select each target's profile separately | Keep inventories, specs and results separate |
 | Other language | No backend | Report unsupported; do not invent counts |
 
@@ -56,7 +56,7 @@ A bare `/verifiable` activates the stance below instead.
 | Command | Procedure | C# limit |
 |---|---|---|
 | `:paths` | Read-only admission/count diagnosis | Whole standalone file; no exit tracing |
-| `:coverage` | [Shared workflow](references/coverage.md), then language procedure | Decisions over `bool`, enums and records of them only; reconciliation unavailable |
+| `:coverage` | [Shared workflow](references/coverage.md), then language procedure | Decisions over `bool`, enums, integers and strings compared with constants, and records of them only; reconciliation unavailable |
 | `:mutation` | Sort surviving mutants using the selected backend | Unsupported; no Stryker.NET integration |
 | `:prune` | Reconcile, show evidence, remove only what it permits | Unsupported; no C# reconciliation |
 | `:init` | Install scoped instructions below | Only restricted C# scope may be named |

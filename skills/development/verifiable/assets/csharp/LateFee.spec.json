@@ -1,0 +1,24 @@
+{
+  "units": {
+    "Example.Fees.LateFee": {
+      "requirement": "A copy returned on time costs nothing. Up to 14 days late the member gets a reminder. After that a staff member still gets a reminder, and every other member, one without a recorded membership included, is charged.",
+      "parameters": ["daysLate", "membership"],
+      "domains": {
+        "daysLate": ["..0", "1..14", "15.."],
+        "membership": ["staff"]
+      },
+      "rows": [
+        { "input": ["..0", "staff"], "outcome": "None" },
+        { "input": ["1..14", "staff"], "outcome": "Reminder" },
+        { "input": ["15..", "staff"], "outcome": "Reminder" },
+        { "input": ["..0", "#null"], "outcome": "None" },
+        { "input": ["1..14", "#null"], "outcome": "Reminder" },
+        { "input": ["15..", "#null"], "outcome": "Charge" },
+        { "input": ["..0", "#other"], "outcome": "None" },
+        { "input": ["1..14", "#other"], "outcome": "Reminder" },
+        { "input": ["15..", "#other"], "outcome": "Charge" }
+      ],
+      "unsettled": []
+    }
+  }
+}

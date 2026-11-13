@@ -15,11 +15,13 @@ that project configuration. Do not migrate consumers to an invented common schem
 ## C# decision artifacts
 
 Specs are JSON as described in [csharp/shapes.md](csharp/shapes.md).
-Obligations have schema `verifiable.csharp/4`, backend `csharp-decision-v3`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, units and unsettled points.
+Obligations have schema `verifiable.csharp/5`, backend `csharp-decision-v4`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, units and unsettled points.
 Each unit has a fully qualified name, ordered parameter names, a `claim` (`every input` or `cells`), the `domains` of its parameters and record fields, a case count and the computed checks.
-A domain lists the parameter name, or `<parameter>.<field>` for a record field, its type, its values and `unnamed`: for an enum the number that stands for every unnamed value, written as a string, and `null` for `bool`.
+A domain lists the parameter name, or `<parameter>.<field>` for a record field, its type, its values and `unnamed`: for an enum the number that stands for every unnamed value, written as a string, and `null` for every other type.
+The values are the cells a spec row can name: `false` and `true`, the member names and `#unnamed`, the ranges of an integer, or the listed strings with `#null` and `#other`.
 A check holds an input array with one entry per parameter and an expected result.
-An input is a JSON boolean for `bool`, a member name or `#unnamed` for an enum, and for a record an object with one property per field in declaration order.
+An input is a JSON boolean for `bool`, a member name or `#unnamed` for an enum, the number tried for an integer, the string tried or JSON `null` for a string, and for a record an object with one property per field in declaration order.
+The checks of an integer or a string hold the values tried, so one cell can appear in several checks.
 An expected result is a JSON boolean or a member name.
 
 The tool compares a freshly generated artifact with the saved artifact before execution.

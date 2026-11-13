@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.Loader;
@@ -12,9 +13,10 @@ using Microsoft.CodeAnalysis.CSharp;
 return Tool.MainCommand(args);
 
 internal sealed record SpecRow(JsonElement[] Input, JsonElement Outcome);
-internal sealed record Spec(string Requirement, string[] Parameters, SpecRow[] Rows, string[] Unsettled);
+internal sealed record Spec(string Requirement, string[] Parameters, SpecRow[] Rows, string[] Unsettled,
+    Dictionary<string, string[]>? Domains = null);
 internal sealed record Specs(Dictionary<string, Spec> Units);
-internal sealed record Case(object[] Input, object Expected);
+internal sealed record Case(object?[] Input, object Expected);
 internal sealed record Domain(string Parameter, string Type, object[] Values, string? Unnamed);
 internal sealed record Unit(string Name, string[] Parameters, string Claim, Domain[] Domains, int Cases, Case[] Checks);
 internal sealed record Report(string Schema, string Backend, string SourceHash, string SpecHash,
@@ -22,7 +24,7 @@ internal sealed record Report(string Schema, string Backend, string SourceHash, 
 
 internal static class Tool
 {
-    private const string Version = "csharp-decision-v3";
+    private const string Version = "csharp-decision-v4";
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -51,7 +53,7 @@ internal static class Tool
             {
                 backend = Version,
                 commands = new[] { "paths", "inventory", "check", "run" },
-                shapes = new[] { "decision:boolean", "decision:enum", "decision:record" },
+                shapes = new[] { "decision:boolean", "decision:enum", "decision:record", "decision:integer", "decision:string" },
                 scope = "one standalone C# source file; all declared methods",
                 unsupported = new[] { "project-loading", "classifiers", "adapters", "wiring",
                     "conversions", "contracts", "reconcile", "mutation", "prune", "test-runner-integration" }
@@ -84,17 +86,21 @@ internal static class Tool
         var diagnostics = compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
         Require(diagnostics.Length == 0, string.Join(Environment.NewLine, diagnostics.Select(d => d.ToString())));
         var admitted = Admission.Methods(root, compilation.GetSemanticModel(tree));
-        var domains = admitted.Select(a => a.Parameters.SelectMany(p => p.Cells.Select(d => new Domain(p.Label(d),
-            d.Enum == null ? "bool" : d.Enum.Type.ToDisplayString(RuntimeName), d.Tokens,
-            d.Enum?.Unnamed.ToString(System.Globalization.CultureInfo.InvariantCulture)))).ToArray()).ToArray();
-        string Claim(Admitted unit) => unit.Inputs.Any(d => d.Enum != null) ? "cells" : "every input";
+        Domain[] Domains(Admitted unit, Plan plan) => [.. unit.Parameters.SelectMany(p => p.Cells.Select(d => (Label: p.Label(d), Cell: d)))
+            .Select((input, i) => new Domain(input.Label,
+                input.Cell.Enum?.Type.ToDisplayString(RuntimeName) ?? input.Cell.Integer?.Type.ToDisplayString()
+                    ?? (input.Cell.Text == null ? "bool" : "string"),
+                plan.Partitions[i].Tokens, input.Cell.Enum?.Unnamed.ToString(CultureInfo.InvariantCulture)))];
+        string Claim(Admitted unit) => unit.Inputs.All(d => d.IsBool) ? "every input" : "cells";
         if (args[0] == "paths")
         {
             Require(options.Count == 1, "paths accepts only --source");
             Console.WriteLine(JsonSerializer.Serialize(new
             {
-                backend = Version, scope = "selected file only; no specs or checks executed",
-                units = admitted.Select((a, i) => new { name = a.Name, cases = a.Cases, claim = Claim(a), domains = domains[i] })
+                backend = Version,
+                scope = "selected file only; no specs or checks executed; integer and string cells are the ones the code tells apart, and a spec's domains can add more",
+                units = admitted.Select(a => (Unit: a, Plan: Plan.For(a, null)))
+                    .Select(a => new { name = a.Unit.Name, cases = a.Plan.Cases, claim = Claim(a.Unit), domains = Domains(a.Unit, a.Plan) })
             }, Json));
             return 0;
         }
@@ -111,6 +117,7 @@ internal static class Tool
         Require(specUnits.Keys.Order().SequenceEqual(admitted.Select(a => a.Name).Order()),
             "spec must name exactly every admitted method");
         var units = new List<Unit>();
+        var plans = new List<Plan>();
         var unsettled = new List<string>();
         for (var index = 0; index < admitted.Length; index++)
         {
@@ -121,7 +128,9 @@ internal static class Tool
                 && spec.Rows != null && spec.Unsettled != null, $"{name}: requirement, parameters, rows and unsettled are required");
             var parameters = unit.Parameters.Select(p => p.Name).ToArray();
             Require(spec!.Parameters.SequenceEqual(parameters), $"{name}: parameter names/order changed");
-            var tokens = unit.Inputs.Select(d => d.Tokens).ToArray();
+            var plan = Plan.For(unit, spec.Domains ?? []);
+            plans.Add(plan);
+            var tokens = plan.Partitions.Select(p => p.Tokens).ToArray();
             var expected = new Dictionary<int, object>();
             foreach (var row in spec.Rows)
             {
@@ -154,19 +163,19 @@ internal static class Tool
                     $"{name}: row outcome must be one of {string.Join(", ", unit.Result.Results)}");
                 Require(expected.TryAdd(key, outcome!), $"{name}: duplicate input row");
             }
-            Require(expected.Count == unit.Cases, $"{name}: spec must describe all {unit.Cases} inputs");
-            var checks = Enumerable.Range(0, unit.Cases).Select(key => new Case(PerParameter(unit, Decode(key, tokens),
-                (parameter, own) => new JsonObject(parameter.Cells.Select((d, i) => KeyValuePair.Create(d.Name,
-                    own[i] is bool flag ? (JsonNode?)JsonValue.Create(flag) : JsonValue.Create((string)own[i]))))),
-                expected[key])).ToArray();
+            Require(expected.Count == plan.Rows, $"{name}: spec needs one row for each of the {plan.Rows} combinations of cells");
+            var checks = Enumerable.Range(0, plan.Cases).Select(plan.Probes).Select(probes => new Case(
+                PerParameter(unit, [.. probes.Select(p => p.Value)], (parameter, own) => new JsonObject(
+                    parameter.Cells.Select((d, i) => KeyValuePair.Create(d.Name, JsonSerializer.SerializeToNode(own[i]))))),
+                expected[plan.Row(probes.Select(p => p.Cell))])).ToArray();
             Require(spec.Unsettled.All(p => !string.IsNullOrWhiteSpace(p)), $"{name}: unsettled entries must contain text");
             unsettled.AddRange(spec.Unsettled.Select(p => $"{name}: {p}"));
-            units.Add(new Unit(name, parameters, Claim(unit), domains[index], unit.Cases, checks));
+            units.Add(new Unit(name, parameters, Claim(unit), Domains(unit, plan), plan.Cases, checks));
         }
         var compiler = typeof(CSharpCompilation).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? throw new InvalidOperationException("compiler informational version unavailable");
-        var report = new Report("verifiable.csharp/4", Version, Hash(source), Hash(specText), compiler,
+        var report = new Report("verifiable.csharp/5", Version, Hash(source), Hash(specText), compiler,
             System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, units.ToArray(), unsettled.ToArray());
         var json = JsonSerializer.Serialize(report, Json);
         if (args[0] == "inventory")
@@ -196,13 +205,12 @@ internal static class Tool
                 var unit = admitted[index];
                 var method = assembly.GetType(unit.Symbol.ContainingType.ToDisplayString(RuntimeName), throwOnError: true)!
                     .GetMethod(unit.Symbol.Name, BindingFlags.Public | BindingFlags.Static)!;
-                var tokens = unit.Inputs.Select(d => d.Tokens).ToArray();
-                for (var key = 0; key < unit.Cases; key++)
+                for (var key = 0; key < plans[index].Cases; key++)
                 {
-                    var cells = Decode(key, tokens);
-                    var shown = PerParameter(unit, cells, (parameter, own) =>
+                    var values = plans[index].Probes(key).Select(p => p.Value).ToArray();
+                    var shown = PerParameter(unit, [.. values.Select((value, i) => Shown(unit.Inputs[i], value))], (parameter, own) =>
                         $"{{{string.Join(",", parameter.Cells.Select((d, i) => $"{d.Name}={own[i]}"))}}}");
-                    var arguments = PerParameter(unit, cells.Select((token, i) => RuntimeValue(assembly, unit.Inputs[i], token)).ToArray(),
+                    var arguments = PerParameter(unit, [.. values.Select((value, i) => RuntimeValue(assembly, unit.Inputs[i], value))],
                         (parameter, own) => assembly.GetType(parameter.Record!.ToDisplayString(RuntimeName), throwOnError: true)!
                             .GetConstructors().Single().Invoke(own));
                     var actual = ResultToken(unit.Result, method.Invoke(null, arguments)!);
@@ -210,7 +218,7 @@ internal static class Tool
                     Require(Equals(actual, expected),
                         $"FAIL {unit.Name}({string.Join(",", shown)}): expected {expected}, got {actual}");
                 }
-                Console.WriteLine($"PASS {unit.Name} {unit.Cases} checks ({Claim(unit)})");
+                Console.WriteLine($"PASS {unit.Name} {plans[index].Cases} checks ({Claim(unit)})");
             }
             foreach (var point in unsettled) Console.WriteLine($"UNSETTLED {point}");
             Console.WriteLine("Selected standalone methods agree with the supplied spec; human review is separate.");
@@ -227,21 +235,14 @@ internal static class Tool
         _ => null
     };
 
-    private static object[] Decode(int key, object[][] tokens)
-    {
-        var input = new object[tokens.Length];
-        for (var i = 0; i < tokens.Length; i++)
-        {
-            input[i] = tokens[i][key % tokens[i].Length];
-            key /= tokens[i].Length;
-        }
-        return input;
-    }
+    /// <summary>A probe as a failure line prints it; a string is quoted so that it cannot be taken for an enum member or for null.</summary>
+    private static object Shown(Dimension dimension, object? value) =>
+        dimension.Text == null ? value! : value == null ? "null" : JsonSerializer.Serialize(value);
 
     /// <summary>Regroups one value per cell into one value per parameter; <paramref name="record"/> builds the value of a record parameter from the values of its fields.</summary>
-    private static object[] PerParameter(Admitted unit, object[] cells, Func<Parameter, object[], object> record)
+    private static object?[] PerParameter(Admitted unit, object?[] cells, Func<Parameter, object?[], object> record)
     {
-        var grouped = new object[unit.Parameters.Length];
+        var grouped = new object?[unit.Parameters.Length];
         var next = 0;
         for (var i = 0; i < grouped.Length; i++)
         {
@@ -253,8 +254,11 @@ internal static class Tool
         return grouped;
     }
 
-    private static object RuntimeValue(Assembly assembly, Dimension dimension, object token)
+    private static object? RuntimeValue(Assembly assembly, Dimension dimension, object? token)
     {
+        if (dimension.Integer != null)
+            return Convert.ChangeType(token, Type.GetType($"System.{dimension.Integer.Type.MetadataName}", throwOnError: true)!,
+                CultureInfo.InvariantCulture);
         if (dimension.Enum == null) return token;
         var type = assembly.GetType(dimension.Enum.Type.ToDisplayString(RuntimeName), throwOnError: true)!;
         var value = Equals(token, Dimension.UnnamedToken)

@@ -37,18 +37,21 @@ All paths are explicit and resolve against the current directory. There is no C#
 Exit 1 means rejected input, stale artifacts, unsupported commands or a failing check;
 exit 0 does not mean the spec has received human review.
 Any other exit code means the tool itself failed, and nothing was admitted or checked.
-In a run, an expression of 3000 operands joined by `&&` ended the tool with a stack overflow, and one of 1000 was admitted.
+A very long chain or nesting in one method ends the tool that way, with a stack overflow.
+In runs of the debug build on .NET 10, 1,400 operands joined by `||` or by `&&` were admitted and 1,600 were not; 2,000 patterns joined by `or` were admitted and 2,400 were not.
+1,000 `else if` branches and 1,000 nested parentheses were admitted, and 10,000 of either were not.
 
 ## Skill commands
 
 - **`:paths`:** build the tool if needed (disclose build artifacts), then run `paths` on each
   selected standalone file. Counts are domain combinations, not traced control-flow paths.
   Report the claim word per method (`every input` or `cells`) and, for an enum parameter or record field, the unnamed cell.
+  For an integer or a string, say that the cells printed are the ones the code tells apart, and that the count can grow when a spec states its own cells.
   No specs are checked or methods executed. If one method is unsupported, the whole file
   is rejected and has no admitted count. This version has no single-method line selector.
   When the rejected code cannot be reshaped into decisions, [beyond-enumeration.md](beyond-enumeration.md) says which other technique fits and what it leaves unchecked.
 - **`:coverage`:** follow [the shared workflow](../coverage.md) in a copy. If extraction is
-  authorized, isolate pure decisions over `bool` values, enums and records of them while preserving the application's calling
+  authorized, isolate pure decisions over `bool` values, enums, integers and strings compared with constants, and records of them while preserving the application's calling
   behavior. Run `paths`; write the requirement/spec; run `inventory`, `check`, and `run`.
   If the project has the C# rules installed, add the file's source, spec and obligations row to their list.
   Run the application's existing build and tests separately using its documented commands.
@@ -71,6 +74,7 @@ python <skill>/scripts/dotnet/test_backend.py
 The regression script builds from the SDK-selected directory and creates fixtures and
 outputs in a temporary `verifiable-workspace` directory outside the repository. It checks
 successful execution, seeded wrong behavior, stale source/specs and unsupported constructs.
+For integers and strings it moves each boundary and changes each constant of its fixtures, one at a time, and expects a failing check every time.
 Each rejection test asserts the reason, so removing one admission guard fails a test.
 It also checks that the tool's `capabilities` output agrees with `scripts/capabilities.json`.
 These regressions validate the tool subset; they do not review application requirements.
