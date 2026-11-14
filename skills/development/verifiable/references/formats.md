@@ -12,17 +12,20 @@ and reconciliation JSONL formats. Their definitions remain in `scripts/project.t
 entry files resolve `VERIFIABLE_TOOLS` to `scripts/`. No language selector is accepted by
 that project configuration. Do not migrate consumers to an invented common schema.
 
-## C# decision artifacts
+## C# artifacts
 
 Specs are JSON as described in [csharp/shapes.md](csharp/shapes.md).
-Obligations have schema `verifiable.csharp/5`, backend `csharp-decision-v4`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, units and unsettled points.
+Obligations have schema `verifiable.csharp/6`, backend `csharp-decision-v5`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, units and unsettled points.
 Each unit has a fully qualified name, ordered parameter names, a `claim` (`every input` or `cells`), the `domains` of its parameters and record fields, a case count and the computed checks.
 A domain lists the parameter name, or `<parameter>.<field>` for a record field, its type, its values and `unnamed`: for an enum the number that stands for every unnamed value, written as a string, and `null` for every other type.
-The values are the cells a spec row can name: `false` and `true`, the member names and `#unnamed`, the ranges of an integer, or the listed strings with `#null` and `#other`.
+The values are the cells a spec row can name: `false` and `true`, the member names and `#unnamed`, the ranges of an integer, the ranges of a `double` with `#nan`, or the listed strings with `#null` and `#other`.
 A check holds an input array with one entry per parameter and an expected result.
-An input is a JSON boolean for `bool`, a member name or `#unnamed` for an enum, the number tried for an integer, the string tried or JSON `null` for a string, and for a record an object with one property per field in declaration order.
-The checks of an integer or a string hold the values tried, so one cell can appear in several checks.
-An expected result is a JSON boolean or a member name.
+An input is a JSON boolean for `bool`, a member name or `#unnamed` for an enum, the number tried for an integer or a `double`, the string tried or JSON `null` for a string, and for a record an object with one property per field in declaration order.
+A `double` is written as the shortest number that reads back as the same double; negative zero is `-0`, and the three values JSON has no number for are the strings `"NaN"`, `"Infinity"` and `"-Infinity"`.
+A `double` without a fraction is written without a decimal point, so the type of a number is read from the unit's `domains`, not from its spelling.
+The checks of a number or a string hold the values tried, so one cell can appear in several checks.
+The expected result of a decision is a JSON boolean or a member name.
+The expected result of a computed result is the value the spec's formula gives for the input: a number, or for a record an object with every field, the kept ones included.
 
 The tool compares a freshly generated artifact with the saved artifact before execution.
 Any change to the text of the source or spec, the Roslyn informational version or the runtime description makes it stale, even if behavior looks unchanged.

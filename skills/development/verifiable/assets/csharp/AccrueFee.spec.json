@@ -1,0 +1,21 @@
+{
+  "units": {
+    "Example.AccrueFee.Apply": {
+      "requirement": "A loan that is not late stays as it is. A late loan gains its daily rate for the days of the step. After 14 days late the rate counts double and the loan is suspended.",
+      "parameters": ["loan", "step"],
+      "domains": {
+        "loan.Id": [".."],
+        "loan.DailyRate": [".."],
+        "loan.DaysLate": ["..0", "1..14", "15.."],
+        "loan.Fee": [".."],
+        "step.Days": [".."]
+      },
+      "rows": [
+        { "input": [{ "DaysLate": "..0" }, {}], "outcome": {} },
+        { "input": [{ "DaysLate": "1..14" }, {}], "outcome": { "Fee": "loan.Fee + loan.DailyRate * step.Days" } },
+        { "input": [{ "DaysLate": "15.." }, {}], "outcome": { "Fee": "loan.Fee + loan.DailyRate * step.Days * 2", "Standing": "Suspended" } }
+      ],
+      "unsettled": []
+    }
+  }
+}

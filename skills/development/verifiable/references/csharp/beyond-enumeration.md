@@ -1,6 +1,6 @@
 # C# code the checker cannot enumerate
 
-Read this when C# code has no admitted shape and reshaping cannot give it one: state that changes over a sequence of steps, concurrency, results that must repeat, floating-point arithmetic, or an algorithm over unbounded values.
+Read this when C# code has no admitted shape and reshaping cannot give it one: state that changes over a sequence of steps, concurrency, results that must repeat, floating-point arithmetic beyond `+`, `-`, `*` and `/`, or an algorithm over unbounded values.
 This skill computes no checks for such code.
 This page names the technique that fits each kind, the strongest sentence a pass of it supports, and what stays unchecked.
 
@@ -17,8 +17,8 @@ Version numbers are as of that date: confirm them on the tool's own release page
 - State the parameters with every result: the model and its bounds, the number of iterations, the sample size and the generator.
 - A result about a model is about the model.
   Say who compared the model with the code, or that nobody did.
-- Keep the two claims apart in a report: admitted decisions with their computed checks, and everything else listed as outside the claim with the technique that was used on it, or none.
-- First pull the finite decisions out of the code into admitted methods, where that preserves behavior.
+- Keep the two claims apart in a report: admitted decisions and computed results with their computed checks, and everything else listed as outside the claim with the technique that was used on it, or none.
+- First pull the finite decisions and the plain formulas out of the code into admitted methods, where that preserves behavior.
   The rest stays outside.
 - Do not install or start any of these tools unasked.
   Each is a cost the user decides on: a model someone writes and maintains, a Java or solver dependency, or a tool that reports usage data.
@@ -30,7 +30,7 @@ Version numbers are as of that date: confirm them on the tool's own release page
 | State that changes step by step: a state machine, a protocol, an all-or-nothing update | A TLA+ model of the design, checked with TLC. For the C# code itself, a model-based property test that applies random operation sequences to the code and to a simple model (CsCheck `SampleModelBased`). | TLC in model-checking mode: the property holds for every behavior of the finite model that was supplied, unless two states shared a fingerprint. Property test: no difference from the model in the sampled sequences. | Whether the code matches the model. Larger models. A property that holds because the model does nothing. Sequences that were not sampled. |
 | Concurrent or asynchronous code | Coyote, which runs the compiled C# test under schedules it controls. | The schedules explored, within the iteration count and the APIs Coyote controls, did not violate the assertions. | Schedules not explored. Reordering of memory accesses. Concurrency APIs Coyote does not control. Elapsed time. |
 | A result that must repeat: save and load, replay of recorded input | No tool was examined for this. A test of your own that feeds the same recorded input twice and compares the resulting state bit for bit, with time and randomness passed in as inputs. | By construction: that input gave the same state twice, on that build, that runtime and that machine. | Another machine, processor architecture or .NET version. Inputs that were not recorded. |
-| Arithmetic over `double` | Property tests with a generator chosen to include NaN, both infinities and extreme values. Explicit `double.IsFinite` checks at the boundary; it is false for NaN and for both infinities. | No counterexample among the sampled values from the stated generator. | Every value the generator cannot produce. Differences between platforms and versions. |
+| Arithmetic over `double` that uses more than `+`, `-`, `*`, `/` and comparison with constants, such as `Math` functions or a tolerance | Property tests with a generator chosen to include NaN, both infinities and extreme values. Explicit `double.IsFinite` checks at the boundary; it is false for NaN and for both infinities. | No counterexample among the sampled values from the stated generator. | Every value the generator cannot produce. Differences between platforms and versions. |
 | A small sequential algorithm over integers | Dafny: write the algorithm with its specification and verify it, then compile it to C#, or keep it as the reference for property tests of hand-written C#. | Every method of the Dafny program meets its written specification for all inputs, when no assumption is left unproven. The compiled C# is meant to behave the same, and Dafny's manual says that is not always possible. | Hand-written C#, including a port of the verified algorithm. External methods, whose postconditions are assumed. Whether the specification says what is wanted. Concurrency. |
 | An invariant that must hold while the program runs | An explicit `if (...) throw` at the boundary, compiled into every build. | Nothing before the run. A violated assumption becomes a visible failure on the executions that occur. | Every execution that does not occur. |
 

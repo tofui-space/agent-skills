@@ -38,21 +38,26 @@ Exit 1 means rejected input, stale artifacts, unsupported commands or a failing 
 exit 0 does not mean the spec has received human review.
 Any other exit code means the tool itself failed, and nothing was admitted or checked.
 A very long chain or nesting in one method ends the tool that way, with a stack overflow.
-In runs of the debug build on .NET 10, 1,400 operands joined by `||` or by `&&` were admitted and 1,600 were not; 2,000 patterns joined by `or` were admitted and 2,400 were not.
+In runs of `paths` with the debug build on .NET 10, 1,800 operands joined by `||` or by `&&` were admitted and 2,000 were not; 2,000 patterns joined by `or` were admitted and 2,400 were not.
+2,000 operands joined by `+` in a result were admitted and 2,200 were not.
 1,000 `else if` branches and 1,000 nested parentheses were admitted, and 10,000 of either were not.
+A formula in a spec ends the tool the same way when it is nested that deep: 1,600 nested parentheses were read and 2,400 were not, and 2,000 minus signs in a row were read and 3,000 were not.
 
 ## Skill commands
 
 - **`:paths`:** build the tool if needed (disclose build artifacts), then run `paths` on each
   selected standalone file. Counts are domain combinations, not traced control-flow paths.
   Report the claim word per method (`every input` or `cells`) and, for an enum parameter or record field, the unnamed cell.
-  For an integer or a string, say that the cells printed are the ones the code tells apart, and that the count can grow when a spec states its own cells.
+  For a number or a string, say that the cells printed are the ones the code tells apart, and that the count can grow when a spec states its own cells.
+  The count is for the inputs a condition reads; an input that nothing reads is tried side by side with the others, and its count joins the product once a spec row names one of its cells.
+  For a `double`, name the `#nan` cell, which every `double` input has.
   No specs are checked or methods executed. If one method is unsupported, the whole file
   is rejected and has no admitted count. This version has no single-method line selector.
   When the rejected code cannot be reshaped into decisions, [beyond-enumeration.md](beyond-enumeration.md) says which other technique fits and what it leaves unchecked.
 - **`:coverage`:** follow [the shared workflow](../coverage.md) in a copy. If extraction is
-  authorized, isolate pure decisions over `bool` values, enums, integers and strings compared with constants, and records of them while preserving the application's calling
+  authorized, isolate pure decisions and computed results over `bool`, enums, numbers, strings and records of them while preserving the application's calling
   behavior. Run `paths`; write the requirement/spec; run `inventory`, `check`, and `run`.
+  For a computed result, write each formula from the requirement, and report a failure that reads `the code computes ..., and the spec states ...` as a difference in the computation, not in one number.
   If the project has the C# rules installed, add the file's source, spec and obligations row to their list.
   Run the application's existing build and tests separately using its documented commands.
   Report these as separate evidence. Reconciliation is unavailable: keep existing tests
@@ -74,7 +79,8 @@ python <skill>/scripts/dotnet/test_backend.py
 The regression script builds from the SDK-selected directory and creates fixtures and
 outputs in a temporary `verifiable-workspace` directory outside the repository. It checks
 successful execution, seeded wrong behavior, stale source/specs and unsupported constructs.
-For integers and strings it moves each boundary and changes each constant of its fixtures, one at a time, and expects a failing check every time.
+For numbers and strings it moves each boundary and changes each constant of its fixtures, one at a time, and expects a failing check every time.
+For computed results it compares the expected value of every check with a second evaluation written in Python, and changes each operator, operand and grouping of its fixtures, in the code and in the spec.
 Each rejection test asserts the reason, so removing one admission guard fails a test.
 It also checks that the tool's `capabilities` output agrees with `scripts/capabilities.json`.
 These regressions validate the tool subset; they do not review application requirements.

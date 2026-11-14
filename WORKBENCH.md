@@ -520,11 +520,11 @@ On-demand audit of accumulated context: the conversation, earlier transcripts, p
 
 ### verifiable
 
-`development` - C# backend landed 2026-11-11 as c850b39 - enum decisions and guidance landed 2026-11-12 as d37fb8a - records and the enum-result correction landed 2026-11-12 as 60c8dfe (merge 2df41fd) - TypeScript tools on Windows landed 2026-11-12 as 21c6170, with the reference corrections in the commit after it - integer ranges and strings in C# decisions landed 2026-11-14
+`development` - C# backend landed 2026-11-11 as c850b39 - enum decisions and guidance landed 2026-11-12 as d37fb8a - records and the enum-result correction landed 2026-11-12 as 60c8dfe (merge 2df41fd) - TypeScript tools on Windows landed 2026-11-12 as 21c6170, with the reference corrections in the commit after it - integer ranges and strings in C# decisions landed 2026-11-14 as 61c4087 - doubles and computed results in C# landed 2026-11-14
 
 **Scope:** one shared assurance workflow with language-specific references and capability
 reporting. Existing TypeScript executable paths remain valid. C# starts with a standalone
-Roslyn checker for decisions over `bool` values, enums, integers and strings compared with constants, and records of them; project loading, other shapes, library contracts,
+Roslyn checker for decisions and computed results over `bool` values, enums, numbers, strings and records of them; project loading, other shapes, library contracts,
 reconciliation, pruning and Stryker.NET integration remain unsupported.
 
 **Validation:** stable .NET 10 build and ten C# backend regressions passed in the expansion.
@@ -627,4 +627,27 @@ Not run: Linux, a release build, evals, description optimization.
 
 **Size (2026-11-13, integers and strings):** body 1,264 words; description 96 words and 626 characters. Privacy scan: zero errors. Skill validation passes.
 
-**Left:** build the per-entity rule with the chosen spec form; decide which of the four TypeScript tool defects to fix in code.
+**Doubles and computed results in C# (2026-11-14):** the checker admits `double` as a parameter and record field, compared with constants in a condition, and a second shape, the computed result: a method that returns `int`, `long`, `double` or the record type of exactly one parameter, built with `+`, `-`, `*`, `/`, unary minus, the three implicit widenings and `with`.
+A method may be `public static` in a static class or `public` in a `public readonly struct`, and a record parameter may be `in`; this is the per-entity rule of the second request.
+A `double` is cut at its constants like an integer, with both zeros in one place and the cell `#nan` for every `double`; a piece is tried at both ends and at one inside value.
+In a spec row, `#any` or a record field that is left out stands for every cell of an input.
+An input that no condition reads and no row names is tried side by side with the other such inputs, not in every combination; the limit of 4096 counts the checks that remain, so a record with many fields stays under it.
+The outcome of a computed result is a formula per row in a subset of C# expression syntax, read by the compiler's parser and typed and evaluated by the tool.
+Decided, and the one thing that goes beyond the form as it was chosen: the tool also requires the result expression the code reaches to be the formula's operations, where only the operands of `+` and of `*` may change places; a second build of the source with every result expression replaced by its number tells which expression is reached.
+The reason is that equal values at the inputs tried do not show that a formula holds for a whole cell; the price is that a formula equal only in exact arithmetic fails.
+Decided and not to be reopened without new evidence: no arithmetic in a condition, no comparison of two inputs, no `Math` or other calls, no `%`, no casts, no `float` or `decimal`, no arithmetic on the small or unsigned integer types, integer division only by a constant other than 0 and -1, results compared bit for bit with every NaN counted as one, a string or small-integer field can only be kept.
+The claim for a computed result rests on arithmetic that is not fused: observed on x64 with .NET 10.0.11 in 20,000,000 cases, not established for Arm64 or other runtimes; `references/csharp/evidence.md` says so.
+Obligations are schema `verifiable.csharp/6`, backend `csharp-decision-v5`; earlier artifacts show as stale.
+Changed for existing specs: one rejection of methods became three with their own reasons; `paths` and an unchanged spec run fewer checks when the code does not read an input with one cell; the claim word is `cells` when `bool` inputs are tried side by side; a string spelled `#any` can no longer be listed.
+Backend suite: 44 tests, 32 before this stage; 44 of 44 on Windows with SDK 10.0.400 and 44 of 44 on Ubuntu 24.04 in a container with SDK 10.0.404.
+The twelve new tests compare 22 decisions over doubles and 13 computed-result methods with a second evaluation in Python at every check, plant 56 faults in the double decisions and 59 in the code and 17 in the specs of the computed results, and reject malformed ranges, formulas and unsupported code with their reason.
+Each of 104 edits of the tool code was undone on its own in two rounds: 94 fail a test at once or after a test was added for them, five were guards that typing already enforces and are removed, and five are kept and recorded in the review file with the reason no test can see them.
+A separate confirmer tried to make the tool pass a method that disagrees with its spec: about 2,700 generated methods, 560,000 sampled inputs and 3,200 wrong specs, none passed.
+It found four defects of this stage, fixed before any commit: a constant part of a formula that overflows was wrapped silently, a formula could carry a comment or a directive, a correct spec failed for an `int` branch in a `long`-typed conditional returned as `double`, and a word that is an input and an enum member was taken for the input.
+Stated in `references/csharp/setup.md` and not fixed, under the declined depth limit: with this build 1,800 operands joined by `||` or `&&` are admitted and 2,000 are not, and a formula of 2,400 nested parentheses ends the tool the same way.
+Not admitted, and possibly needed by the rules of the second request, which nobody has checked against real code: an interface on the struct, a record as a field (an identifier type of its own), a step parameter that is no positional record.
+Not run: Arm64, macOS, a release build, evals, description optimization; no second reader has checked the rewritten references.
+
+**Size (2026-11-14, doubles and computed results):** body 1,268 words; description 96 words and 622 characters. Privacy scan: zero errors. Skill validation passes.
+
+**Left:** decide which of the four TypeScript tool defects to fix in code.
