@@ -180,7 +180,7 @@ Lead with the answer. Report:
 A read-only command says no files changed except any documented solver cache. Never call
 code verified, safe or fully covered. C# results must say they did not check the
 application build or reconcile its tests, and whether the file was checked standalone or with its project.
-They also repeat the claim word the tool printed per method: `every input`, or `cells` when an enum is involved. Report successful stages separately from an
+They also repeat the claim word the tool printed per method, `every input` or `cells`. Report successful stages separately from an
 incomplete `:apply`.
 
 ## References loaded only when needed
