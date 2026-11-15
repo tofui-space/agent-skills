@@ -3,7 +3,7 @@
   "typescript": {
     "implementation": "scripts/*.ts",
     "setup": "references/typescript/setup.md",
-    "commands": { "paths": "supported", "coverage": "supported", "mutation": "supported", "prune": "supported", "init": "instructions" },
+    "commands": { "paths": "supported", "apply": "supported", "mutation": "supported", "prune": "supported", "init": "instructions" },
     "shapes": ["decision", "classifier", "adapter", "wiring", "conversion"],
     "runners": ["node:test", "vitest"],
     "limits": ["Admission vocabularies and toolchain requirements apply", "mutation.ts was not run on Stryker.NET reports"]
@@ -11,9 +11,9 @@
   "csharp": {
     "implementation": "scripts/dotnet/Verifiable.csproj",
     "setup": "references/csharp/setup.md",
-    "commands": { "paths": "restricted", "coverage": "partial", "mutation": "unsupported", "prune": "unsupported", "init": "instructions" },
+    "commands": { "paths": "restricted", "apply": "partial", "mutation": "unsupported", "prune": "unsupported", "init": "instructions" },
     "shapes": ["decision:boolean", "decision:enum", "decision:record", "decision:integer", "decision:string", "decision:double", "rule:number", "rule:record"],
-    "runners": ["standalone compiled-method runner"],
-    "limits": ["One standalone file, all methods admitted or the file is rejected", "No MSBuild project loading or application assembly execution", "No existing-suite reconciliation or library contracts", "Not the complete coverage workflow"]
+    "runners": ["compiled-method runner, standalone or on what the build of a project gave the compiler"],
+    "limits": ["One file, standalone or in its project; all its methods admitted or the file is rejected", "No solution loading or application assembly execution", "No existing-suite reconciliation or library contracts", "Not the complete coverage workflow"]
   }
 }

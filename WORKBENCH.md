@@ -650,4 +650,10 @@ Not run: Arm64, macOS, a release build, evals, description optimization; no seco
 
 **Size (2026-11-14, doubles and computed results):** body 1,268 words; description 96 words and 622 characters. Privacy scan: zero errors. Skill validation passes.
 
+**Dead end before cost (2026-11-15):** at the checkpoint after the diagnosis (SKILL.md, "Doing the work", step 3), the agent answers the request first, in its words. When the behavior asked about gets only `no shape` steps, it reports the dead end without asking, and lists fitting side pieces one line each with what they would not cover; the cost in `references/typescript/coverage.md` then applies to those pieces only. One question per message, worded so a plain "yes" cannot answer two things. Not run: evals.
+
+**Final review (2026-11-15):** 3 blocking and 4 non-blocking findings, all applied. The dead-end definition now also covers code the diagnosis gives only `no shape` steps, so step 3 can use it before any reshape; the two other statements of it point to the definition. The contract reference is read when a piece calls a library function. The C# report repeats the tool's claim word without restating its condition, which was wrong (`Program.cs` prints `cells` for any non-`bool` input). Removed: two trigger phrases taken from a single conversation, a third statement that a build request runs `:apply`, and the parenthetical in the description. The references were not reviewed.
+
+**Size (2026-11-15):** body 2,060 words; description 118 words and about 755 characters. Most of the growth since 2026-11-14 is in the uncommitted "Doing the work" and C# project changes. Privacy scan: zero errors. Skill validation passes.
+
 **Left:** decide which of the four TypeScript tool defects to fix in code.

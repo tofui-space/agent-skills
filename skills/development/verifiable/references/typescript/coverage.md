@@ -1,6 +1,6 @@
 # The coverage workflow in detail
 
-Read this before running `/verifiable:coverage` or `/verifiable:prune`. `<skill>` is the folder of the skill and `<project>` the root of the copy you work in.
+Read this before running `/verifiable:apply` (formerly `:coverage`) or `/verifiable:prune`. `<skill>` is the folder of the skill and `<project>` the root of the copy you work in.
 
 ## Contents
 
@@ -11,7 +11,7 @@ Read this before running `/verifiable:coverage` or `/verifiable:prune`. `<skill>
 
 ## Before you start
 
-Tell the user what the workflow costs and let them decide: a reshape changes production code, so it needs a review of its own; the first inventory of a text classifier can take minutes, because a solver computes the cells (later runs read a cache); a reconciliation runs the existing suite once per test and once or more per reached cell.
+The cost goes to the user at the checkpoint after the diagnosis (SKILL.md, "Doing the work", step 3), after the answer to the request. When the behavior the request is about is a dead end, report that without asking; the cost below is then only the cost of the optional pieces. A reshape changes production code, so it needs a review of its own; the first inventory of a text classifier can take minutes, because a solver computes the cells (later runs read a cache); a reconciliation runs the existing suite once per test and once or more per reached cell.
 
 ## Steps
 
