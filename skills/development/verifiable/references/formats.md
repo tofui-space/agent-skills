@@ -15,7 +15,8 @@ that project configuration. Do not migrate consumers to an invented common schem
 ## C# artifacts
 
 Specs are JSON as described in [csharp/shapes.md](csharp/shapes.md).
-Obligations have schema `verifiable.csharp/6`, backend `csharp-decision-v5`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, units and unsettled points.
+Obligations have schema `verifiable.csharp/7`, backend `csharp-decision-v6`, source/spec hashes, the Roslyn informational version as `compiler`, the .NET runtime description as `runtime`, `project`, units and unsettled points.
+`project` is `null` for a standalone file; for a file checked with `--project` it holds the name of the project file as `file`, and the `configuration` and `framework` that the build used.
 Each unit has a fully qualified name, ordered parameter names, a `claim` (`every input` or `cells`), the `domains` of its parameters and record fields, a case count and the computed checks.
 A domain lists the parameter name, or `<parameter>.<field>` for a record field, its type, its values and `unnamed`: for an enum the number that stands for every unnamed value, written as a string, and `null` for every other type.
 The values are the cells a spec row can name: `false` and `true`, the member names and `#unnamed`, the ranges of an integer, the ranges of a `double` with `#nan`, or the listed strings with `#null` and `#other`.
@@ -29,9 +30,13 @@ The expected result of a computed result is the value the spec's formula gives f
 
 The tool compares a freshly generated artifact with the saved artifact before execution.
 Any change to the text of the source or spec, the Roslyn informational version or the runtime description makes it stale, even if behavior looks unchanged.
+For a file checked with `--project`, the hashed source is the selected file; another project file name, or a build with another configuration or framework, also makes the artifact stale.
+Two project files of the same name in different folders are not told apart by the artifact.
+The content of the project file and of the other source files is not hashed: a change there makes the artifact stale only when it changes a domain or a check.
 The hashes are taken over the decoded text, so adding a byte order mark, or saving the same text in another Unicode encoding with its byte order mark, does not.
 A rebuild of the tool itself is not recorded; only the backend constant identifies its semantics.
 Recompute; do not edit hashes or counts by hand.
+The tool writes an artifact only over an existing artifact or as a new file whose name ends with `obligations.json`, so that it never replaces or creates a file a build reads.
 The backend constant must change when admission or enumeration semantics change, and the schema when the artifact's fields change. Human review remains separate
 from programmatic validation; the artifact contains no automatic review certification.
 

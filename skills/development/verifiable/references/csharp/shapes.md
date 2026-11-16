@@ -10,11 +10,14 @@ The examples in `assets/csharp/` are executable inputs to the checker; adapt the
 ## Admission
 
 The entire file must compile as standalone C# 14 against the tool runtime's platform assemblies.
+With `--project` it is compiled as one of the files of its project instead, from what the project's own build gave the compiler, and only when the program that build wrote has the same code as the tool's compilation; [setup.md](setup.md) says how.
+Every rule below still applies to the selected file, and where a rule says "with a project" it is wider than for a standalone file.
 Expression and statement rules are checked on the compiler's bound operations, so they are about what the code means, not how it is spelled.
 Class, struct, enum, record, method and parameter rules are checked on the syntax: modifiers, attribute lists and parameter lists.
 The types of parameters, results and record fields are the ones the compiler resolves, and so is whether a method is generic, takes `__arglist` or returns by reference.
 Enum member values, and the names that decide whether two methods are overloads, are also the resolved ones.
-Preprocessor directives, imports, `checked` and `unchecked` are rejected on the syntax anywhere in the file, the value of an enum member included.
+Preprocessor directives, `checked` and `unchecked` are rejected on the syntax anywhere in the file, the value of an enum member included.
+`using` directives are rejected in a standalone file and admitted with a project; extern aliases and assembly attributes are rejected in both.
 
 - Classes: top-level or namespace-contained `public static` non-generic classes, containing only methods and at least one.
   No nested types, fields, properties, constructors, attributes or base types.
@@ -22,9 +25,11 @@ Preprocessor directives, imports, `checked` and `unchecked` are rejected on the 
   No fields, properties, constructors, interfaces, attributes, `partial` or `ref struct`.
   The tool calls a method of such a struct on the struct's zero value.
 - Enums: `public`, declared at the top level or in a namespace of the checked file, without attributes (so no `[Flags]`), with distinct member values.
-  Enums from other assemblies and nullable enums are not admitted.
+  With a project, an enum that another source file of the project declares is admitted under the same rules; it must not be declared inside another type.
+  Enums from other assemblies, a referenced project included, and nullable enums are not admitted.
   An enum of underlying type `byte` or `sbyte` that names every value from zero up is not admitted, because the unnamed cell's representative is searched from zero up.
 - Records: `public readonly record struct`, declared at the top level or in a namespace of the checked file, with at least one positional field and nothing else.
+  With a project, a record that another source file of the project declares is admitted under the same rules, in one declaration and not inside another type.
   Each field is a `bool`, an admitted enum, an integer, a `double` or a `string`, written as an ordinary positional parameter with no default, attribute or modifier.
   No body members, type parameters, base list, attributes or `partial`.
   Record classes, a `record struct` without `readonly`, and a field of a record type are not admitted.
@@ -38,7 +43,7 @@ Preprocessor directives, imports, `checked` and `unchecked` are rejected on the 
   `in` is admitted on a record parameter only.
 - Bodies: an expression body, or blocks containing only `if`/`else` and `return`.
   `switch` statements are not admitted.
-- No imports, directives (including conditional compilation), calls, assignments, loops, exceptions, state reads, async work, local declarations, `checked` or `unchecked`, or `ref` expressions.
+- No imports in a standalone file, no directives (including conditional compilation), calls, assignments, loops, exceptions, state reads, async work, local declarations, `checked` or `unchecked`, or `ref` expressions.
 
 Compilation errors and unsupported code reject the whole file before any target executes.
 Parameter names and order are part of the spec and are checked.
@@ -48,8 +53,10 @@ Two parameters of one type can still be passed in the wrong order by a caller; t
 
 A condition is the whole body of a decision, and in a computed result it is what chooses between result expressions.
 
-- Expressions: Boolean literals, parameters, a field read from a record parameter (`request.Overdue`), named enum members (and any other compile-time constant field of those types), parentheses, `!`, `&&`, `||`, `&`, `|`, `^`, `==`, `!=`, `?:`, `is` with a pattern, and `switch` expressions.
+- Expressions: Boolean literals, parameters, a field read from a record parameter (`request.Overdue`), named enum members, any other compile-time constant field of type `bool`, parentheses, `!`, `&&`, `||`, `&`, `|`, `^`, `==`, `!=`, `?:`, `is` with a pattern, and `switch` expressions.
 - Enum values are compared only with named members: `==` or `!=` between a member and a parameter or a field of a record parameter, and constant patterns combined with `or`, `and` and `not`.
+  A constant of an enum type that another type declares is not a named member and is rejected, because it can hold a value that no member names.
+  With a project, the constant that a number or a string is compared with may be a `const` of another file or of a referenced assembly; the cell is cut at its value.
   No ordering (`<`, `>`, relational patterns), casts, arithmetic, bit operations, `default`, and no comparison of two enum parameters or fields.
 - Integer values are compared only with compile-time constants of an integer type: `<`, `<=`, `>`, `>=`, `==` or `!=` between a constant and a parameter or a field of a record parameter, in either order, and relational and constant patterns combined with `or`, `and` and `not`.
   The constant is the value the compiler folds, so `7 * 24`, `int.MaxValue`, `(int)Membership.Staff` and `'a'` are constants.

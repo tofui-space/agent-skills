@@ -1,10 +1,13 @@
 ## Verifiable code
 
-These rules apply to the explicitly selected code under the claim, using the language
-backend named below. Installing these instructions does not admit code or establish coverage.
+These rules apply to the explicitly selected code under the claim, and to any code written
+or rewritten under a request to the verifiable skill, using the language backend named below. Installing these instructions does not admit code or establish coverage.
 
 - Let the selected tool compute checks from admitted domains and reviewed specs. Do not
   estimate counts or replace computed obligations with chosen representative cases.
+- Write new or rewritten code in the forms from the start. Code is outside them only when
+  the tool says so after a reshape was tried; report it as a dead end with the tool's reason,
+  and never present hand-picked tests as its checks.
 - Write specs from requirements. If a requirement is unsettled, record it and report it.
 - Report rejections, unsupported capabilities, outside code and checks that did not run.
   Unknown is not pass, and unsupported is not zero checks.

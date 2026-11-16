@@ -6,37 +6,64 @@ using Microsoft.CodeAnalysis.Operations;
 /// <summary>Decides which source is admitted, and reads from each method what its code can tell apart and what it computes.</summary>
 internal static class Admission
 {
-    public static void CheckDeclarations(CompilationUnitSyntax root)
+    /// <summary>Checks the declarations of the selected file; <paramref name="inProject"/> says that the file is compiled with the other files of its project, which is where using directives are admitted.</summary>
+    public static void CheckDeclarations(CompilationUnitSyntax root, bool inProject)
     {
         Tool.Require(!root.DescendantTrivia().Any(t => t.IsDirective), "preprocessor directives are unsupported");
-        Tool.Require(root.Usings.Count == 0 && root.Externs.Count == 0 && root.AttributeLists.Count == 0,
-            "using directives, extern aliases and assembly attributes are unsupported");
+        Tool.Require(root.Externs.Count == 0 && root.AttributeLists.Count == 0 && (inProject || root.Usings.Count == 0),
+            inProject ? "extern aliases and assembly attributes are unsupported" : "using directives, extern aliases and assembly attributes are unsupported");
         Tool.Require(!root.DescendantNodes().Any(n => n is CheckedExpressionSyntax or CheckedStatementSyntax),
             "checked and unchecked are unsupported");
-        CheckMembers(root.Members);
+        CheckMembers(root.Members, inProject);
     }
 
-    public static Admitted[] Methods(CompilationUnitSyntax root, SemanticModel model)
+    /// <summary>
+    /// Reads the methods of the selected file.
+    /// <paramref name="place"/> is where an enum or a record may be declared, as a rejection names it: the file, or the project when the file is compiled with the other files of its project.
+    /// </summary>
+    public static Admitted[] Methods(CompilationUnitSyntax root, SemanticModel model, string place)
     {
         var enums = new Dictionary<ITypeSymbol, EnumDomain>(SymbolEqualityComparer.Default);
+        var records = new Dictionary<ITypeSymbol, IParameterSymbol[]>(SymbolEqualityComparer.Default);
+        void Record(RecordDeclarationSyntax declaration, SemanticModel own)
+        {
+            var type = own.GetDeclaredSymbol(declaration) ?? throw new InvalidOperationException("record has no symbol");
+            var fields = declaration.ParameterList!.Parameters
+                .Select(p => own.GetDeclaredSymbol(p) ?? throw new InvalidOperationException("record field has no symbol")).ToArray();
+            foreach (var field in fields) Elsewhere(field.Type);
+            Tool.Require(fields.All(f => Cell(f.Name, f.Type, enums) != null),
+                $"{type.Name}: record fields must be bool, integers, double, strings or enums declared in the {place}");
+            records.Add(type, fields);
+        }
+        // An enum or a record that is named here and declared in another file of the project is held to the rules of one declared in the selected file.
+        void Elsewhere(ITypeSymbol type)
+        {
+            if (enums.ContainsKey(type) || records.ContainsKey(type) || type.DeclaringSyntaxReferences is not [var reference]) return;
+            var declaration = reference.GetSyntax();
+            if (declaration is not (EnumDeclarationSyntax or RecordDeclarationSyntax)) return;
+            Tool.Require(type.ContainingType == null, $"{type.Name}: an enum or a record that is declared inside another type is not admitted");
+            if (declaration is EnumDeclarationSyntax enumeration)
+            {
+                CheckEnum(enumeration);
+                enums.Add(type, ReadEnum((INamedTypeSymbol)type));
+            }
+            else
+            {
+                CheckRecord((RecordDeclarationSyntax)declaration);
+                Record((RecordDeclarationSyntax)declaration, model.Compilation.GetSemanticModel(reference.SyntaxTree));
+            }
+        }
         foreach (var declaration in root.DescendantNodes().OfType<EnumDeclarationSyntax>())
         {
             var type = model.GetDeclaredSymbol(declaration) ?? throw new InvalidOperationException("enum has no symbol");
             enums.Add(type, ReadEnum(type));
         }
-        var records = new Dictionary<ITypeSymbol, IParameterSymbol[]>(SymbolEqualityComparer.Default);
-        foreach (var declaration in root.DescendantNodes().OfType<RecordDeclarationSyntax>())
-        {
-            var type = model.GetDeclaredSymbol(declaration) ?? throw new InvalidOperationException("record has no symbol");
-            var fields = declaration.ParameterList!.Parameters
-                .Select(p => model.GetDeclaredSymbol(p) ?? throw new InvalidOperationException("record field has no symbol")).ToArray();
-            Tool.Require(fields.All(f => Cell(f.Name, f.Type, enums) != null),
-                $"{type.Name}: record fields must be bool, integers, double, strings or enums declared in the file");
-            records.Add(type, fields);
-        }
+        foreach (var declaration in root.DescendantNodes().OfType<RecordDeclarationSyntax>()) Record(declaration, model);
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
         Tool.Require(methods.Length > 0, "no decision methods found");
-        var admitted = methods.Select(m => Method(m, model, enums, records)).ToArray();
+        foreach (var signature in methods.Select(m => model.GetDeclaredSymbol(m) ?? throw new InvalidOperationException("method has no symbol")))
+            foreach (var type in signature.Parameters.Select(p => p.Type).Append(signature.ReturnType)) Elsewhere(type);
+        var admitted = methods.Select(m => Method(m, model, enums, records, place)).ToArray();
         Tool.Require(admitted.Select(a => a.Name).Distinct().Count() == admitted.Length,
             "overloads are unsupported; unit names must be unique");
         return admitted;
@@ -81,14 +108,14 @@ internal static class Admission
         : type.SpecialType == SpecialType.System_String ? new(name, Text: new(StringComparer.Ordinal))
         : null;
 
-    private static void CheckMembers(SyntaxList<MemberDeclarationSyntax> members)
+    private static void CheckMembers(SyntaxList<MemberDeclarationSyntax> members, bool inProject)
     {
         foreach (var member in members)
         {
             if (member is BaseNamespaceDeclarationSyntax ns)
             {
-                Tool.Require(ns.Usings.Count == 0 && ns.Externs.Count == 0, "namespace imports are unsupported");
-                CheckMembers(ns.Members);
+                Tool.Require(ns.Externs.Count == 0 && (inProject || ns.Usings.Count == 0), "namespace imports are unsupported");
+                CheckMembers(ns.Members, inProject);
             }
             else if (member is ClassDeclarationSyntax or StructDeclarationSyntax)
             {
@@ -99,25 +126,25 @@ internal static class Admission
                     && type.Members.Count > 0 && type.Members.All(m => m is MethodDeclarationSyntax),
                     "only public static classes and public readonly structs, non-generic and containing methods, are admitted; no fields, constructors, interfaces or nested types");
             }
-            else if (member is EnumDeclarationSyntax enumeration)
-            {
-                Tool.Require(enumeration.Modifiers.Count == 1 && enumeration.Modifiers.Any(SyntaxKind.PublicKeyword)
-                    && enumeration.AttributeLists.Count == 0
-                    && enumeration.Members.All(m => m.AttributeLists.Count == 0),
-                    $"{enumeration.Identifier.Text}: only public enums without attributes are admitted");
-            }
-            else if (member is RecordDeclarationSyntax record)
-            {
-                Tool.Require(record.Modifiers.Count == 2
-                    && record.Modifiers.Any(SyntaxKind.PublicKeyword) && record.Modifiers.Any(SyntaxKind.ReadOnlyKeyword)
-                    && record.TypeParameterList == null && record.BaseList == null && record.AttributeLists.Count == 0
-                    && record.Members.Count == 0 && record.ParameterList is { Parameters.Count: > 0 } fields
-                    && fields.Parameters.All(p => p.Modifiers.Count == 0 && p.Default == null && p.AttributeLists.Count == 0),
-                    $"{record.Identifier.Text}: only public readonly record structs with ordinary positional fields and no other members are admitted");
-            }
+            else if (member is EnumDeclarationSyntax enumeration) CheckEnum(enumeration);
+            else if (member is RecordDeclarationSyntax record) CheckRecord(record);
             else throw new InvalidOperationException($"unsupported declaration: {member.Kind()}");
         }
     }
+
+    private static void CheckEnum(EnumDeclarationSyntax enumeration) =>
+        Tool.Require(enumeration.Modifiers.Count == 1 && enumeration.Modifiers.Any(SyntaxKind.PublicKeyword)
+            && enumeration.AttributeLists.Count == 0
+            && enumeration.Members.All(m => m.AttributeLists.Count == 0),
+            $"{enumeration.Identifier.Text}: only public enums without attributes are admitted");
+
+    private static void CheckRecord(RecordDeclarationSyntax record) =>
+        Tool.Require(record.Modifiers.Count == 2
+            && record.Modifiers.Any(SyntaxKind.PublicKeyword) && record.Modifiers.Any(SyntaxKind.ReadOnlyKeyword)
+            && record.TypeParameterList == null && record.BaseList == null && record.AttributeLists.Count == 0
+            && record.Members.Count == 0 && record.ParameterList is { Parameters.Count: > 0 } fields
+            && fields.Parameters.All(p => p.Modifiers.Count == 0 && p.Default == null && p.AttributeLists.Count == 0),
+            $"{record.Identifier.Text}: only public readonly record structs with ordinary positional fields and no other members are admitted");
 
     private static EnumDomain ReadEnum(INamedTypeSymbol type)
     {
@@ -138,7 +165,7 @@ internal static class Admission
     }
 
     private static Admitted Method(MethodDeclarationSyntax method, SemanticModel model,
-        Dictionary<ITypeSymbol, EnumDomain> enums, Dictionary<ITypeSymbol, IParameterSymbol[]> records)
+        Dictionary<ITypeSymbol, EnumDomain> enums, Dictionary<ITypeSymbol, IParameterSymbol[]> records, string place)
     {
         var symbol = model.GetDeclaredSymbol(method) ?? throw new InvalidOperationException("method has no symbol");
         // Each parameter gets dimensions of its own, because the cuts and constants of a number or a string are collected per input.
@@ -156,12 +183,12 @@ internal static class Admission
             $"{symbol.Name}: only public static methods of a class and public methods of a readonly struct, without attributes or type parameters, are admitted");
         Tool.Require(parameters.All(p => p != null) && method.ParameterList.Parameters.Select((p, i) => p.Default == null && p.AttributeLists.Count == 0
                 && (p.Modifiers.Count == 0 || (p.Modifiers.Count == 1 && p.Modifiers[0].IsKind(SyntaxKind.InKeyword) && parameters[i]!.Record != null))).All(ordinary => ordinary),
-            $"{symbol.Name}: parameters are bool, integers, double, strings, and enums and records declared in the file, without default values or attributes, and without modifiers other than in on a record");
+            $"{symbol.Name}: parameters are bool, integers, double, strings, and enums and records declared in the {place}, without default values or attributes, and without modifiers other than in on a record");
         var inputs = parameters.SelectMany(p => p!.Cells).ToArray();
         var entities = parameters.Where(p => SymbolEqualityComparer.Default.Equals(p!.Record, symbol.ReturnType)).ToArray();
         var decision = IsBool(symbol.ReturnType) || enums.ContainsKey(symbol.ReturnType);
         Tool.Require(decision || Term.KindOf(symbol.ReturnType) != Kind.Other || entities.Length == 1,
-            $"{symbol.Name}: the result is bool, an enum declared in the file, int, long, double, or the record type of exactly one parameter");
+            $"{symbol.Name}: the result is bool, an enum declared in the {place}, int, long, double, or the record type of exactly one parameter");
         // A computed result holds one number, or the fields of the record parameter it is made from.
         Output[] outputs = decision ? []
             : entities.Length == 1 ? [.. entities[0]!.Cells.Select(field => new Output(field.Name, field, field.Kind, Array.FindIndex(inputs, input => ReferenceEquals(input, field))))]
@@ -199,7 +226,14 @@ internal static class Admission
             return named;
         }
         bool IsInput(IOperation operation) => Subject(operation) != default;
-        bool IsConstant(IOperation operation) => operation is IFieldReferenceOperation { Field.IsConst: true };
+        // A constant of an enum type that another type declares can hold a value that no member names, and an unnamed cell is tried at one value only.
+        bool IsConstant(IOperation operation)
+        {
+            if (operation is not IFieldReferenceOperation { Field: { IsConst: true } field }) return false;
+            Tool.Require(field.Type.TypeKind != TypeKind.Enum || SymbolEqualityComparer.Default.Equals(field.ContainingType, field.Type),
+                $"{symbol.Name}: a constant of an enum type is admitted only as a named member of that enum");
+            return true;
+        }
         bool IsBoolLiteral(IOperation operation) => operation is ILiteralOperation { ConstantValue: { HasValue: true, Value: bool } };
 
         // Admits a test of one cell against a constant, written as `cell <kind> constant`, and records what the test lets the code tell apart.
@@ -310,7 +344,7 @@ internal static class Admission
                     break;
                 case IConversionOperation { IsImplicit: true } converted when Subject(converted.Operand).Cell is { Declared: true } cell:
                     throw new InvalidOperationException(Misuse(cell));
-                case IUnaryOperation negation when IsBool(Operand(negation.Operand)):
+                case IUnaryOperation { OperatorKind: UnaryOperatorKind.Not } negation when IsBool(Operand(negation.Operand)):
                     break;
                 case IBinaryOperation binary:
                     if (Comparison(binary)) break;
@@ -393,6 +427,8 @@ internal static class Admission
                 if (change is not ISimpleAssignmentOperation { Target: IPropertyReferenceOperation { Instance: IInstanceReferenceOperation } target } set)
                     throw Unsupported("result", change);
                 var field = Array.FindIndex(outputs, output => output.Name == target.Property.Name);
+                // What is set is no field of the record: a property that another file adds to it.
+                if (field < 0) throw Unsupported("result", change);
                 terms[field] = outputs[field].Kind == Kind.Other ? Kept(set.Value) : Term.Widen(Number(set.Value), outputs[field].Kind, symbol.Name);
                 labels[field] = set.Value.Syntax.ToString();
             }

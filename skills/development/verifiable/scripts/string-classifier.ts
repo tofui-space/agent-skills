@@ -19,7 +19,10 @@ import {
 } from './branches.ts'
 import {
   type CharSet,
+  classEndSmt,
+  classRun,
   neighbours,
+  type ParsedRegex,
   parseRegex,
   regexSmt,
   regexSource,
@@ -153,6 +156,31 @@ export function translate(
       language: string,
       accepts: (value: string) => boolean,
     ) => `(str.in_re s ${fromOffset(language, term, accepts(''))})`
+    const inPattern = (
+      term: Term,
+      parsed: ParsedRegex,
+      accepts: (value: string) => boolean,
+    ) => {
+      const run =
+        term.offset === 0 && term.tail === 0 ? classRun(parsed) : undefined
+      if (!run || (!run.fromStart && !run.toEnd))
+        return inLanguage(term, regexSmt(parsed), accepts)
+      // The length is asked as a repeat of any character, which the solver handles at any count,
+      // and the class as a repeat without a count; together they say what the counted repeat says.
+      const only = regexSmt(run.star)
+      const n = run.min
+      if (run.fromStart && run.toEnd) {
+        const length =
+          run.max === undefined
+            ? atLeast(n)
+            : run.max === n
+              ? exactly(n)
+              : `((_ re.loop ${n} ${run.max}) re.allchar)`
+        return `(and (str.in_re s ${length}) (str.in_re s ${only}))`
+      }
+      // With one anchor, a run of n characters of the class at that end is enough, since a longer run holds one.
+      return classEndSmt(run, 's')
+    }
     const atom = (
       term: Term,
       language: string,
@@ -278,18 +306,15 @@ export function translate(
           problem: `${receiver.text} uses ${parsed.error}, which the regular expression subset does not cover; the subset is: ${regexSubset}`,
         }
       const compiled = new RegExp(pattern, flags)
+      const matches = (value: string) => compiled.test(value)
       return {
-        ...atom(
-          term,
-          regexSmt(parsed),
-          (value) => compiled.test(value),
-          setsOf(parsed),
-        ),
+        ...atom(term, regexSmt(parsed), matches, setsOf(parsed)),
+        smt: inPattern(term, parsed, matches),
         neighbours: neighbours(parsed).map((near) => {
           const nearby = new RegExp(regexSource(near))
           const accepts = (value: string) => nearby.test(value)
           return {
-            smt: inLanguage(term, regexSmt(near), accepts),
+            smt: inPattern(term, near, accepts),
             text: `/${regexSource(near)}/`,
             test: (input) => accepts(cut(term, input as string)),
             sets: setsOf(near),

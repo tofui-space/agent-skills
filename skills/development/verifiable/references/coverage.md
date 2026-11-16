@@ -1,7 +1,8 @@
-# Shared coverage workflow
+# Shared workflow of `:apply`
 
-Read this before `:coverage`, then the selected language's procedure. Capabilities differ;
-never finish an unavailable stage by substituting an estimate or a different kind of test.
+Read this before `:apply` (formerly `:coverage`), then the selected language's procedure.
+SKILL.md, "Doing the work", gives the checkpoints with the user and the meaning of a dead end.
+Capabilities differ; never finish an unavailable stage by substituting an estimate or a different kind of test.
 
 1. **Scope and cost.** Identify target language/project, supported shapes and runner, and
    unavailable stages before changing files. Explain reshape review and expected run costs.
@@ -29,5 +30,5 @@ never finish an unavailable stage by substituting an estimate or a different kin
 ## Language procedures
 
 - [TypeScript coverage](typescript/coverage.md): the existing complete tool workflow.
-- [C# setup](csharp/setup.md): decisions and computed results over `bool`, enums, numbers, strings and records of them only; standalone compilation, no library
+- [C# setup](csharp/setup.md): decisions and computed results over `bool`, enums, numbers, strings and records of them only; a standalone file or a file inside its project, no library
   contracts or reconciliation. Keep test files even if every computed check passes.

@@ -20,8 +20,10 @@ internal sealed record Specs(Dictionary<string, Spec> Units);
 internal sealed record Case(object?[] Input, object? Expected);
 internal sealed record Domain(string Parameter, string Type, object[] Values, string? Unnamed);
 internal sealed record Unit(string Name, string[] Parameters, string Claim, Domain[] Domains, int Cases, Case[] Checks);
+/// <summary>The project a file was checked with, as the options named it: its file name, and the configuration and framework where one was given.</summary>
+internal sealed record ProjectOptions(string File, string? Configuration, string? Framework);
 internal sealed record Report(string Schema, string Backend, string SourceHash, string SpecHash,
-    string Compiler, string Runtime, Unit[] Units, string[] Unsettled);
+    string Compiler, string Runtime, ProjectOptions? Project, Unit[] Units, string[] Unsettled);
 
 /// <summary>What a spec row states for one output of a computed result: the formula as a term and as written.</summary>
 internal sealed record Stated(Term Term, string Text);
@@ -34,7 +36,7 @@ internal sealed record Check(Probe[] Probes, object?[] Expected, Stated[]? Formu
 
 internal static class Tool
 {
-    private const string Version = "csharp-decision-v5";
+    private const string Version = "csharp-decision-v6";
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -66,8 +68,8 @@ internal static class Tool
                 backend = Version,
                 commands = new[] { "paths", "inventory", "check", "run" },
                 shapes = new[] { "decision:boolean", "decision:enum", "decision:record", "decision:integer", "decision:string", "decision:double", "rule:number", "rule:record" },
-                scope = "one standalone C# source file; all declared methods",
-                unsupported = new[] { "project-loading", "classifiers", "adapters", "wiring",
+                scope = "one C# source file, standalone or compiled from what the build of its project gave the compiler; all methods declared in the file",
+                unsupported = new[] { "solution-loading", "classifiers", "adapters", "wiring",
                     "conversions", "contracts", "reconcile", "mutation", "prune", "test-runner-integration" }
             }, Json));
             return 0;
@@ -78,26 +80,45 @@ internal static class Tool
         foreach (var arg in args.Skip(1))
         {
             var parts = arg.Split('=', 2);
-            Require(parts.Length == 2 && new[] { "--source", "--spec", "--out" }.Contains(parts[0])
+            Require(parts.Length == 2 && new[] { "--source", "--spec", "--out", "--project", "--configuration", "--framework" }.Contains(parts[0])
                 && parts[1].Length > 0 && options.TryAdd(parts[0], parts[1]), "unknown or repeated option");
         }
         string Option(string name) => options.TryGetValue(name, out var value)
             ? Path.GetFullPath(value) : throw new InvalidOperationException($"missing {name}");
         var sourcePath = Option("--source");
         Require(Path.GetExtension(sourcePath) == ".cs", "--source must name a .cs file");
-        var source = File.ReadAllText(sourcePath);
-        var tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp14));
-        var root = tree.GetCompilationUnitRoot();
-        Admission.CheckDeclarations(root);
-
-        var referencePaths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))?.Split(Path.PathSeparator)
-            ?? throw new InvalidOperationException("runtime reference assemblies unavailable");
-        var compilation = CSharpCompilation.Create("VerifiableDecision", [tree],
-            referencePaths.Select(p => MetadataReference.CreateFromFile(p)),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release));
-        var diagnostics = compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
-        Require(diagnostics.Length == 0, string.Join(Environment.NewLine, diagnostics.Select(d => d.ToString())));
-        var admitted = Admission.Methods(root, compilation.GetSemanticModel(tree));
+        var projectPath = options.ContainsKey("--project") ? Option("--project") : null;
+        Require(projectPath != null || !(options.ContainsKey("--configuration") || options.ContainsKey("--framework")), "--configuration and --framework need --project");
+        SyntaxTree tree;
+        CSharpCompilation compilation;
+        Built? built = null;
+        if (projectPath == null)
+        {
+            tree = CSharpSyntaxTree.ParseText(File.ReadAllText(sourcePath), new CSharpParseOptions(LanguageVersion.CSharp14));
+            Admission.CheckDeclarations((CompilationUnitSyntax)tree.GetRoot(), inProject: false);
+            var referencePaths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))?.Split(Path.PathSeparator)
+                ?? throw new InvalidOperationException("runtime reference assemblies unavailable");
+            compilation = CSharpCompilation.Create("VerifiableDecision", [tree],
+                referencePaths.Select(p => MetadataReference.CreateFromFile(p)),
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release));
+            var diagnostics = compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
+            Require(diagnostics.Length == 0, string.Join(Environment.NewLine, diagnostics.Select(d => d.ToString())));
+        }
+        else
+        {
+            built = Project.Load(projectPath, options.GetValueOrDefault("--configuration"), options.GetValueOrDefault("--framework"));
+            compilation = built.Compilation;
+            var sameName = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            tree = compilation.SyntaxTrees.FirstOrDefault(compiled => string.Equals(Path.GetFullPath(compiled.FilePath), sourcePath, sameName))
+                ?? throw new InvalidOperationException("--source is not among the files the project compiles");
+            Admission.CheckDeclarations((CompilationUnitSyntax)tree.GetRoot(), inProject: true);
+        }
+        var root = (CompilationUnitSyntax)tree.GetRoot();
+        var source = tree.GetText().ToString();
+        var admitted = Admission.Methods(root, compilation.GetSemanticModel(tree), projectPath == null ? "file" : "project");
+        // The expected value of a formula is computed with arithmetic that wraps, as code compiled without overflow checks computes it.
+        Require(!compilation.Options.CheckOverflow || admitted.All(unit => unit.Sites.Length == 0),
+            "the project compiles with overflow checks, and a computed result is checked as arithmetic that wraps");
         Domain[] Domains(Admitted unit, Plan plan) => [.. unit.Inputs.Select((input, i) => new Domain(unit.Labels[i],
             input.Enum?.Type.ToDisplayString(RuntimeName) ?? input.Number?.Type.ToDisplayString() ?? (input.Text == null ? "bool" : "string"),
             plan.Partitions[i].Tokens, input.Enum?.Unnamed.ToString(CultureInfo.InvariantCulture)))];
@@ -105,7 +126,7 @@ internal static class Tool
         string Claim(Admitted unit, Plan plan) => unit.Inputs.All(d => d.IsBool) && plan.Plain.Count(plain => plain) <= 1 ? "every input" : "cells";
         if (args[0] == "paths")
         {
-            Require(options.Count == 1, "paths accepts only --source");
+            Require(!options.ContainsKey("--spec") && !options.ContainsKey("--out"), "paths accepts only --source, and --project with its options");
             Console.WriteLine(JsonSerializer.Serialize(new
             {
                 backend = Version,
@@ -118,8 +139,9 @@ internal static class Tool
 
         var specPath = Option("--spec");
         var outPath = Option("--out");
-        Require(!new[] { sourcePath, specPath }.Contains(outPath, StringComparer.OrdinalIgnoreCase),
-            "--out must not overwrite the source or spec");
+        Require(!File.Exists(outPath) || IsObligations(File.ReadAllText(outPath)), "--out must not overwrite a file that is no obligations file");
+        // A new file of another name could be one that a build reads: a source file, a settings file of the build or of the SDK.
+        Require(File.Exists(outPath) || Path.GetFileName(outPath).EndsWith("obligations.json"), "--out must name a new file whose name ends with obligations.json");
         var specText = File.ReadAllText(specPath);
         RejectDuplicateKeys(specText);
         var specs = JsonSerializer.Deserialize<Specs>(specText, Json);
@@ -175,8 +197,9 @@ internal static class Tool
         var compiler = typeof(CSharpCompilation).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? throw new InvalidOperationException("compiler informational version unavailable");
-        var report = new Report("verifiable.csharp/6", Version, Hash(source), Hash(specText), compiler,
-            System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, units.ToArray(), unsettled.ToArray());
+        var project = built == null ? null : new ProjectOptions(Path.GetFileName(projectPath!), built.Configuration, built.Framework);
+        var report = new Report("verifiable.csharp/7", Version, Hash(source), Hash(specText), compiler,
+            System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, project, units.ToArray(), unsettled.ToArray());
         var json = JsonSerializer.Serialize(report, Json);
         if (args[0] == "inventory")
         {
@@ -185,15 +208,25 @@ internal static class Tool
             Console.WriteLine(json);
             return 0;
         }
-        Require(File.Exists(outPath) && File.ReadAllText(outPath).Trim() == json,
+        // The file is compared as data, so a formatter that changes only its layout does not make it stale.
+        Require(File.Exists(outPath) && SameData(File.ReadAllText(outPath), json),
             "STALE obligations: recompute inventory for this source, spec and compiler");
         if (args[0] == "check")
         {
             Console.WriteLine("CURRENT obligations; no checks executed");
             return 0;
         }
-        var context = new AssemblyLoadContext("verifiable", isCollectible: true);
-        Assembly Load(CSharpCompilation built)
+        // The checks run in the tool's own process, so they say what the code does on this runtime and this processor type.
+        var targeted = compilation.GetSpecialType(SpecialType.System_Object).ContainingAssembly.Identity;
+        Require(targeted.Name != "mscorlib", "the project targets .NET Framework, where the same arithmetic can give another number than on the tool's runtime; the tool does not run its code");
+        Require(targeted.Version.Major <= Environment.Version.Major,
+            $"the project targets .NET {targeted.Version.Major}, and the tool runs on .NET {Environment.Version.Major}, which cannot run its code");
+        var processor = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture;
+        Require(compilation.Options.Platform == Platform.AnyCpu || compilation.Options.Platform.ToString().Equals(processor.ToString(), StringComparison.OrdinalIgnoreCase),
+            $"the project is built for {compilation.Options.Platform}, and the tool runs as {processor}; it does not run code built for another processor type");
+        // The two builds have the same assembly name, as the project's references may expect it, so each is loaded into a context of its own.
+        AssemblyLoadContext[] contexts = [new("verifiable", isCollectible: true), new("verifiable-sites", isCollectible: true)];
+        Assembly Load(AssemblyLoadContext context, CSharpCompilation built)
         {
             using var emitted = new MemoryStream();
             var emit = built.Emit(emitted);
@@ -203,9 +236,11 @@ internal static class Tool
         }
         try
         {
-            var assembly = Load(compilation);
+            // For a project, the assembly that runs is the one that was compared with the program the build wrote.
+            var assembly = built == null ? Load(contexts[0], compilation) : contexts[0].LoadFromStream(new MemoryStream(built.Assembly));
             // A second build of the same source answers, for the same input, which result expression the code reaches.
-            var numbered = admitted.Any(unit => unit.Sites.Length > 0) ? Load(compilation.ReplaceSyntaxTree(tree, tree.WithRootAndOptions(Numbered(root, admitted), tree.Options)).WithAssemblyName("VerifiableSites")) : null;
+            var siteNames = SiteNames(admitted, compilation.GetSemanticModel(tree));
+            var numbered = admitted.Any(unit => unit.Sites.Length > 0) ? Load(contexts[1], compilation.ReplaceSyntaxTree(tree, tree.WithRootAndOptions(Numbered(root, admitted, siteNames), tree.Options))) : null;
             for (var index = 0; index < admitted.Length; index++)
             {
                 var unit = admitted[index];
@@ -214,14 +249,14 @@ internal static class Tool
                     var values = check.Probes.Select(p => p.Value).ToArray();
                     var shown = string.Join(",", PerParameter(unit, [.. values.Select((value, i) => Shown(unit.Inputs[i], value))], (parameter, own) =>
                         $"{{{string.Join(",", parameter.Cells.Select((d, i) => $"{d.Name}={own[i]}"))}}}"));
-                    var actual = Call(assembly, unit, values)!;
+                    var actual = Call(assembly, unit, unit.Symbol.Name, values)!;
                     if (check.Formulas == null)
                     {
                         var decided = ResultToken(unit.Result!, actual);
                         Require(Equals(decided, check.Expected[0]), $"FAIL {unit.Name}({shown}): expected {check.Expected[0]}, got {decided}");
                         continue;
                     }
-                    var site = unit.Sites[(int)Call(numbered!, unit, values)!];
+                    var site = unit.Sites[(int)Call(numbered!, unit, siteNames[index], values)!];
                     // An input that a row leaves open is never fixed to the value tried, because its values are not tried in every combination.
                     bool Fixed(int input) => check.Probes[input].Sole && !plans[index].Plain[input];
                     for (var i = 0; i < unit.Outputs.Length; i++)
@@ -238,10 +273,12 @@ internal static class Tool
                 Console.WriteLine($"PASS {unit.Name} {checks[index].Length} checks ({Claim(unit, plans[index])})");
             }
             foreach (var point in unsettled) Console.WriteLine($"UNSETTLED {point}");
-            Console.WriteLine("Selected standalone methods agree with the supplied spec; human review is separate.");
+            Console.WriteLine(project == null ? "Selected standalone methods agree with the supplied spec; human review is separate."
+                : $"Selected methods agree with the supplied spec. They are the code of the program that the build of {project.File} wrote, configuration {project.Configuration}, framework {project.Framework}, "
+                    + $"and were run on {System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} as {processor}; human review is separate.");
             return 0;
         }
-        finally { context.Unload(); }
+        finally { foreach (var context in contexts) context.Unload(); }
     }
 
     /// <summary>The cells a spec row covers: for each input the positions of its cells, all of them where the row says so or leaves a record field out.</summary>
@@ -312,21 +349,46 @@ internal static class Tool
         return unit.Outputs.Select(output => Formula(output, written.TryGetProperty(output.Name, out var stated) ? stated : null)).ToArray();
     }
 
-    /// <summary>The source with every result expression of a computed result replaced by its number, and the result type of those methods by int.</summary>
-    private static CompilationUnitSyntax Numbered(CompilationUnitSyntax root, Admitted[] admitted)
+    /// <summary>
+    /// For each unit, the name of the method that answers which result expression a computed result reaches.
+    /// It is a name that nothing in reach of the unit has, so adding the method changes nothing for the code that is there.
+    /// </summary>
+    private static string[] SiteNames(Admitted[] admitted, SemanticModel model)
     {
-        var numbers = admitted.SelectMany(unit => unit.Sites.Select((site, number) => (site.Syntax, number))).ToDictionary(site => site.Syntax, site => site.number);
-        var types = admitted.Where(unit => unit.Sites.Length > 0)
-            .Select(unit => (SyntaxNode)((MethodDeclarationSyntax)unit.Symbol.DeclaringSyntaxReferences[0].GetSyntax()).ReturnType);
-        return root.ReplaceNodes(numbers.Keys.Concat(types), (original, _) => numbers.TryGetValue(original, out var number)
-            ? SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(number)).WithTriviaFrom(original)
-            : SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)).WithTriviaFrom(original));
+        var given = new HashSet<(ISymbol, string)>();
+        return [.. admitted.Select(unit =>
+        {
+            var name = "VerifiableSiteOf" + unit.Symbol.Name;
+            // The name must be free where the method stands: a member of the type or a name the file imports would otherwise change meaning.
+            var at = unit.Symbol.DeclaringSyntaxReferences[0].Span.Start;
+            while (model.LookupSymbols(at, name: name).Length > 0 || !given.Add((unit.Symbol.ContainingType, name))) name += "_";
+            return name;
+        })];
     }
 
-    private static object? Call(Assembly assembly, Admitted unit, object?[] values)
+    /// <summary>
+    /// The source with one more method next to each computed result.
+    /// The added method makes the same choices and returns the number of the result expression it reaches.
+    /// The computed result itself stays as it is, so the other files of a project that call it still compile.
+    /// </summary>
+    private static CompilationUnitSyntax Numbered(CompilationUnitSyntax root, Admitted[] admitted, string[] siteNames)
+    {
+        MethodDeclarationSyntax Declared(Admitted unit) => (MethodDeclarationSyntax)unit.Symbol.DeclaringSyntaxReferences[0].GetSyntax();
+        var computed = admitted.Where(unit => unit.Sites.Length > 0).ToDictionary(Declared,
+            unit => unit.Sites.Select((site, number) => (site.Syntax, number)).ToDictionary(site => site.Syntax, site => site.number));
+        var names = admitted.Select((unit, index) => (Method: Declared(unit), Name: siteNames[index])).ToDictionary(unit => unit.Method, unit => unit.Name);
+        MemberDeclarationSyntax Sites(MethodDeclarationSyntax method) => method
+            .ReplaceNodes(computed[method].Keys, (site, _) => SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(computed[method][site])).WithTriviaFrom(site))
+            .WithIdentifier(SyntaxFactory.Identifier(names[method]).WithTriviaFrom(method.Identifier))
+            .WithReturnType(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)).WithTriviaFrom(method.ReturnType));
+        return root.ReplaceNodes(computed.Keys.Select(method => method.Parent!).Distinct(), (original, rewritten) => ((TypeDeclarationSyntax)rewritten).AddMembers(
+            [.. ((TypeDeclarationSyntax)original).Members.OfType<MethodDeclarationSyntax>().Where(computed.ContainsKey).Select(Sites)]));
+    }
+
+    private static object? Call(Assembly assembly, Admitted unit, string name, object?[] values)
     {
         var type = assembly.GetType(unit.Symbol.ContainingType.ToDisplayString(RuntimeName), throwOnError: true)!;
-        var method = type.GetMethod(unit.Symbol.Name, BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance)!;
+        var method = type.GetMethod(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)!;
         var arguments = PerParameter(unit, [.. values.Select((value, i) => RuntimeValue(assembly, unit.Inputs[i], value))],
             (parameter, own) => assembly.GetType(parameter.Record!.ToDisplayString(RuntimeName), throwOnError: true)!
                 .GetConstructors().Single().Invoke(own));
@@ -421,7 +483,26 @@ internal static class Tool
         Visit(document.RootElement);
     }
 
+    /// <summary>Whether a text is an obligations file of this tool, of any schema version.</summary>
+    private static bool IsObligations(string text)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("schema", out var schema)
+                && schema.ValueKind == JsonValueKind.String && schema.GetString()!.StartsWith("verifiable.csharp/");
+        }
+        catch (JsonException) { return false; }
+    }
+
     private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    /// <summary>Whether two JSON texts hold the same data, whatever their layout; text that is no JSON holds none.</summary>
+    private static bool SameData(string stored, string computed)
+    {
+        try { return JsonNode.DeepEquals(JsonNode.Parse(stored), JsonNode.Parse(computed)); }
+        catch (JsonException) { return false; }
+    }
 
     internal static void Require([DoesNotReturnIf(false)] bool condition, string message)
     {

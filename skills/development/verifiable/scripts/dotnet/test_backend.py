@@ -13,6 +13,28 @@ HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent.parent
 
 
+def hidden():
+    """Keyword arguments that keep a child process from opening a window on Windows.
+    A console program started by a process that has no console opens a console window of its own, so it is started without one.
+    A process that has a console passes it on to its children, which then write in that console's code page, as tool_output_encoding expects."""
+    if sys.platform != "win32":
+        return {}
+    import ctypes
+    return {} if ctypes.windll.kernel32.GetConsoleWindow() else {"creationflags": subprocess.CREATE_NO_WINDOW}
+
+
+HIDDEN = hidden()
+
+
+def tool_output_encoding():
+    """The encoding the tool writes redirected output in: on Windows the code page of the console, elsewhere UTF-8."""
+    if sys.platform != "win32":
+        return "utf-8"
+    import ctypes
+    page = ctypes.windll.kernel32.GetConsoleOutputCP()
+    return f"cp{page}" if page else "oem"
+
+
 class BackendTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -20,7 +42,7 @@ class BackendTests(unittest.TestCase):
         workspace.mkdir(exist_ok=True)
         cls.build = tempfile.TemporaryDirectory(dir=workspace)
         cls.addClassCleanup(cls.build.cleanup)
-        subprocess.run(["dotnet", "build", "--nologo", "--artifacts-path", cls.build.name], cwd=HERE, check=True)
+        subprocess.run(["dotnet", "build", "--nologo", "--artifacts-path", cls.build.name], cwd=HERE, check=True, **HIDDEN)
         cls.dll = Path(cls.build.name) / "bin/Verifiable/debug/Verifiable.dll"
 
     def setUp(self):
@@ -45,7 +67,7 @@ class BackendTests(unittest.TestCase):
             args += [f"--source={self.source}"]
         if command in ("inventory", "check", "run"):
             args += [f"--spec={self.spec}", f"--out={self.out}"]
-        result = subprocess.run(args + (extra or []), capture_output=True, text=True)
+        result = subprocess.run(args + (extra or []), capture_output=True, text=True, encoding=tool_output_encoding(), errors="replace", **HIDDEN)
         self.assertEqual(result.returncode, 0 if ok else 1, result.stdout + result.stderr)
         return result.stdout + result.stderr
 
@@ -56,7 +78,8 @@ class BackendTests(unittest.TestCase):
         self.assertFalse(self.out.exists())
         report = json.loads(self.run_tool("inventory"))
         self.assertEqual(len(report["units"][0]["checks"]), 4)
-        self.assertEqual(report["schema"], "verifiable.csharp/6")
+        self.assertEqual(report["schema"], "verifiable.csharp/7")
+        self.assertIsNone(report["project"])
         self.assertRegex(report["compiler"], r"^\d+\.\d+\.\d+")
         self.assertNotRegex(report["compiler"], r"^\d+\.\d+\.\d+\.\d+$")
         self.assertTrue(report["runtime"].startswith(".NET "), report["runtime"])
@@ -75,7 +98,7 @@ class BackendTests(unittest.TestCase):
                     self.run_tool("inventory")
                     target = {"source": self.source, "spec": self.spec, "artifact": self.out}[kind]
                     old = target.read_text()
-                    target.write_text(old.replace("csharp-decision-v5", "other") if kind == "artifact" else old + "\n")
+                    target.write_text(old.replace("csharp-decision-v6", "other") if kind == "artifact" else old + "\n")
                     self.assertIn("STALE", self.run_tool(command, ok=False))
                     target.write_text(old)
 
@@ -372,7 +395,7 @@ public static class Rules
         self.write_spec(spec)
         text = self.run_tool("inventory")
         report = json.loads(text)
-        self.assertEqual(report["schema"], "verifiable.csharp/6")
+        self.assertEqual(report["schema"], "verifiable.csharp/7")
         self.assertEqual(report["units"][0]["parameters"], ["request"])
         self.assertEqual(report["units"][0]["checks"][5],
                          {"input": [{"Membership": "#unnamed", "Overdue": True, "Reserved": False}], "expected": False})
@@ -1972,6 +1995,751 @@ public static class Plain
             self.spec.write_text(self.spec.read_text().replace("rate.Factor + 1", "rate.Factor + 1 "))
             self.assertIn("STALE", self.run_tool(command, ok=False))
 
+    PROJECT_PROPERTIES = "<LangVersion>13</LangVersion><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors>"
+    # The project turns warnings into errors and silences one warning through its editor configuration, which the build reads and the tool does not.
+    PROJECT_EDITOR_CONFIGURATION = "root = true\n[*.cs]\ndotnet_diagnostic.CS0219.severity = none\n"
+    PROJECT_TYPES = """namespace Library.Model;
+
+public enum Standing { Good, Suspended }
+public enum Verdict { Lend, Refuse }
+public readonly record struct Loan(int DaysLate, double Fee, double DailyRate, Standing Standing);
+public readonly record struct Step(double Days);
+public static class Limits
+{
+#if LONG_GRACE
+    public const int Grace = 21;
+#else
+    public const int Grace = 14;
+#endif
+#if DEBUG
+    public const double Factor = 2;
+#else
+    public const double Factor = 3;
+#endif
+    public const bool Open = true;
+}
+"""
+    PROJECT_RULES = """using Library.Model;
+
+namespace Library.Rules;
+
+public readonly struct LateFee
+{
+    public Loan Apply(in Loan loan, in Step step) => loan.DaysLate switch
+    {
+        <= 0 => loan,
+        <= Limits.Grace => loan with { Fee = loan.Fee + loan.DailyRate * step.Days },
+        _ => loan with { Fee = loan.Fee + loan.DailyRate * step.Days * Limits.Factor, Standing = Standing.Suspended }
+    };
+}
+public static class Desk
+{
+    public static bool Lends(Standing standing, bool staff) => Limits.Open && (staff || standing == Standing.Good);
+    public static Verdict Decide(bool staff, bool late) => staff || !late ? Verdict.Lend : Verdict.Refuse;
+}
+"""
+    # This file calls the computed result and relies on the usings the build generates.
+    # Its unused variable is the warning that the editor configuration silences.
+    PROJECT_CALLER = """using Library.Model;
+using Library.Rules;
+
+namespace Library;
+
+public sealed class Ledger
+{
+    private readonly List<Loan> loans = [];
+    public string? Note { get; set; }
+    public void Advance(Step step)
+    {
+        var unused = 0;
+        for (var i = 0; i < loans.Count; i++) loans[i] = new LateFee().Apply(loans[i], step);
+    }
+}
+"""
+    APPLY, LENDS, DECIDE = "Library.Rules.LateFee.Apply", "Library.Rules.Desk.Lends", "Library.Rules.Desk.Decide"
+
+    def project(self, files, properties="", items="", name="App", framework="<TargetFramework>net10.0</TargetFramework>", restore=True):
+        """Writes a project into a folder of its own, with the SDK selection of the tool, and returns the path of its project file."""
+        folder = self.root / name
+        folder.mkdir(exist_ok=True)
+        (folder / "global.json").write_text((HERE / "global.json").read_text())
+        (folder / f"{name}.csproj").write_text(
+            f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>{framework}{properties}</PropertyGroup>{items}</Project>')
+        for file, text in files.items():
+            (folder / file).write_text(text, encoding="utf-8")
+        if restore:
+            subprocess.run(["dotnet", "restore", "--nologo"], cwd=folder, check=True, capture_output=True, **HIDDEN)
+        return folder / f"{name}.csproj"
+
+    def library(self, properties=PROJECT_PROPERTIES):
+        """The sample project, with the rules file selected; returns the option that names the project."""
+        project = self.project({"Types.cs": self.PROJECT_TYPES, "Rules.cs": self.PROJECT_RULES, "Ledger.cs": self.PROJECT_CALLER,
+                                ".editorconfig": self.PROJECT_EDITOR_CONFIGURATION}, properties)
+        self.source = project.parent / "Rules.cs"
+        return [f"--project={project}"]
+
+    def library_spec(self, grace=14, factor=2):
+        return {"units": {
+            self.APPLY: {
+                "requirement": "A loan that is not late stays as it is. A late loan gains its daily rate for the days of the step. After the grace days the rate counts more and the loan is suspended.",
+                "parameters": ["loan", "step"],
+                "domains": {"loan.DaysLate": ["..0", f"1..{grace}", f"{grace + 1}.."], "loan.Fee": [".."], "loan.DailyRate": [".."], "step.Days": [".."]},
+                "rows": [{"input": [{"DaysLate": "..0"}, {}], "outcome": {}},
+                         {"input": [{"DaysLate": f"1..{grace}"}, {}], "outcome": {"Fee": "loan.Fee + loan.DailyRate * step.Days"}},
+                         {"input": [{"DaysLate": f"{grace + 1}.."}, {}],
+                          "outcome": {"Fee": f"loan.Fee + loan.DailyRate * step.Days * {factor}", "Standing": "Suspended"}}],
+                "unsettled": []},
+            self.LENDS: {
+                "requirement": "Staff borrow in any standing, others in good standing only.", "parameters": ["standing", "staff"],
+                "rows": [{"input": ["Good", "#any"], "outcome": True}, {"input": ["Suspended", True], "outcome": True},
+                         {"input": ["Suspended", False], "outcome": False}, {"input": ["#unnamed", True], "outcome": True},
+                         {"input": ["#unnamed", False], "outcome": False}],
+                "unsettled": []},
+            self.DECIDE: {
+                "requirement": "Staff are lent to, and so is anyone who is not late.", "parameters": ["staff", "late"],
+                "rows": [{"input": [True, "#any"], "outcome": "Lend"}, {"input": [False, False], "outcome": "Lend"}, {"input": [False, True], "outcome": "Refuse"}],
+                "unsettled": []}}}
+
+    def test_a_file_is_checked_with_the_settings_and_the_other_files_of_its_project(self):
+        extra = self.library()
+        # The file names its types through a using directive, which a standalone file may not have.
+        self.assertIn("using directives, extern aliases and assembly attributes are unsupported", self.run_tool("paths", ok=False))
+        paths = {unit["name"]: unit for unit in json.loads(self.run_tool("paths", extra=extra))["units"]}
+        self.assertEqual(sorted(paths), sorted([self.APPLY, self.LENDS, self.DECIDE]))
+        # The cut at 14 is a constant that another file declares, and the enum is named with the namespace of the file that declares it.
+        late, standing = paths[self.APPLY]["domains"][0], paths[self.APPLY]["domains"][3]
+        self.assertEqual((late["parameter"], late["values"]), ("loan.DaysLate", ["..0", "1..14", "15.."]))
+        self.assertEqual((standing["parameter"], standing["type"], standing["values"]), ("loan.Standing", "Library.Model.Standing", ["Good", "Suspended", "#unnamed"]))
+        self.assertFalse(self.out.exists())
+        self.write_spec(self.library_spec())
+        report = self.report(self.run_tool("inventory", extra=extra))
+        self.assertEqual(report["project"], {"file": "App.csproj", "configuration": "Debug", "framework": "net10.0"})
+        units = {unit["name"]: unit for unit in report["units"]}
+
+        def apply(loan, step, grace=14, factor=2.0):
+            if loan["DaysLate"] <= 0: return loan
+            if loan["DaysLate"] <= grace: return {**loan, "Fee": loan["Fee"] + loan["DailyRate"] * step["Days"]}
+            return {**loan, "Fee": loan["Fee"] + loan["DailyRate"] * step["Days"] * factor, "Standing": "Suspended"}
+        for check in units[self.APPLY]["checks"]:
+            inputs = self.decoded(units[self.APPLY], check)
+            self.assert_same_result(check["expected"], apply(*inputs), f"{inputs}")
+        self.assertEqual(sorted({check["input"][0]["DaysLate"] for check in units[self.APPLY]["checks"]}), [-2**31, 0, 1, 14, 15, 2**31 - 1])
+        self.assertEqual(len(units[self.LENDS]["checks"]), 6)
+        self.assertEqual({(*check["input"], check["expected"]) for check in units[self.LENDS]["checks"]}, {
+            (standing, staff, staff or standing == "Good") for standing in ("Good", "Suspended", "#unnamed") for staff in (False, True)})
+        # The result of this decision is an enum that another file declares and that no parameter names.
+        self.assertEqual(len(units[self.DECIDE]["checks"]), 4)
+        self.assertEqual({(*check["input"], check["expected"]) for check in units[self.DECIDE]["checks"]},
+                         {(staff, late, "Lend" if staff or not late else "Refuse") for staff in (False, True) for late in (False, True)})
+        self.assertIn("CURRENT", self.run_tool("check", extra=extra))
+        result = self.run_tool("run", extra=extra)
+        for line in (f"PASS {self.APPLY} 24 checks (cells)", f"PASS {self.LENDS} 6 checks (cells)", f"PASS {self.DECIDE} 4 checks (every input)",
+                     "They are the code of the program that the build of App.csproj wrote, configuration Debug, framework net10.0, and were run on .NET "):
+            self.assertIn(line, result)
+        self.assertNotIn("standalone", result)
+        # A project whose own build is up to date is read like one that was never built.
+        subprocess.run(["dotnet", "build", "--nologo"], cwd=self.source.parent, check=True, capture_output=True, **HIDDEN)
+        for _ in range(2):
+            self.assertIn(f"PASS {self.APPLY} 24 checks (cells)", self.run_tool("run", extra=extra))
+        # The source is named as the file system names it: on Windows in any case of its letters, elsewhere in its own case only.
+        named = self.source
+        self.source = named.with_name("RULES.cs")
+        other_case = self.run_tool("paths", ok=sys.platform == "win32", extra=extra)
+        self.assertIn(self.APPLY if sys.platform == "win32" else "--source is not among the files the project compiles", other_case)
+        self.source = named
+        # Using directives inside a namespace, at any depth, are admitted like the ones before it.
+        named.write_text("namespace Library\n{\n    namespace Rules\n    {\n        using Library.Model;\n"
+                         + self.PROJECT_RULES.split("namespace Library.Rules;\n")[1] + "    }\n}\n")
+        self.run_tool("inventory", extra=extra)
+        self.assertIn(f"PASS {self.APPLY} 24 checks (cells)", self.run_tool("run", extra=extra))
+
+        # A symbol that the project defines and the configuration of the build decide which constant the other file declares.
+        for properties, options, grace, factor in (("<DefineConstants>$(DefineConstants);LONG_GRACE</DefineConstants>", [], 21, 2),
+                                                   ("", ["--configuration=Release"], 14, 3)):
+            with self.subTest(properties=properties, options=options):
+                extra = self.library(self.PROJECT_PROPERTIES + properties) + options
+                late = json.loads(self.run_tool("paths", extra=extra))["units"][0]["domains"][0]
+                self.assertEqual(late["values"], ["..0", f"1..{grace}", f"{grace + 1}.."])
+                self.write_spec(self.library_spec(grace, factor))
+                report = self.report(self.run_tool("inventory", extra=extra))
+                self.assertEqual(report["project"], {"file": "App.csproj", "configuration": "Release" if options else "Debug", "framework": "net10.0"})
+                unit = report["units"][0]
+                for check in unit["checks"]:
+                    inputs = self.decoded(unit, check)
+                    self.assert_same_result(check["expected"], apply(*inputs, grace, float(factor)), f"{inputs}")
+                result = self.run_tool("run", extra=extra)
+                self.assertIn(f"PASS {self.APPLY}", result)
+                self.assertEqual("App.csproj wrote, configuration Release, framework net10.0, and were run on" in result, bool(options))
+                # The stored checks belong to the configuration they were made with.
+                if options:
+                    self.assertIn("STALE", self.run_tool("check", ok=False, extra=extra[:1]))
+                # The spec of the other setting does not hold for this one.
+                self.write_spec(self.library_spec())
+                self.run_tool("inventory", extra=extra)
+                self.assertIn(f"FAIL {self.APPLY}", self.run_tool("run", ok=False, extra=extra))
+        # The language version of the project is the one the tool compiles with: record structs came with C# 10.
+        extra = self.library(self.PROJECT_PROPERTIES.replace("<LangVersion>13", "<LangVersion>9"))
+        old = self.run_tool("paths", ok=False, extra=extra)
+        self.assertIn("the project does not build:", old)
+        self.assertIn("not available in C# 9.0", old)
+
+    def test_a_change_in_another_file_of_the_project_is_noticed(self):
+        extra = self.library()
+        types, ledger = self.source.with_name("Types.cs"), self.source.with_name("Ledger.cs")
+        self.write_spec(self.library_spec())
+
+        def changed(file, old, new):
+            self.run_tool("inventory", extra=extra)
+            text = file.read_text()
+            self.assertEqual(text.count(old), 1, old)
+            file.write_text(text.replace(old, new))
+            return file, text
+        # The cut moves with the constant, so the stored checks are no longer the checks of this code.
+        file, text = changed(types, "Grace = 14", "Grace = 13")
+        self.assertIn("STALE", self.run_tool("check", ok=False, extra=extra))
+        self.run_tool("inventory", extra=extra)
+        self.assertIn(f"FAIL {self.APPLY}({{DaysLate=14,", self.run_tool("run", ok=False, extra=extra))
+        file.write_text(text)
+        # A constant in a result changes no check, since the expected values come from the spec; the run then shows that the code computes something else.
+        file, text = changed(types, "Factor = 2;", "Factor = 2.5;")
+        self.assertIn("CURRENT", self.run_tool("check", extra=extra))
+        self.assertIn("Fee: the code computes loan.Fee + loan.DailyRate * step.Days * Limits.Factor, and the spec states loan.Fee + loan.DailyRate * step.Days * 2",
+                      self.run_tool("run", ok=False, extra=extra))
+        file.write_text(text)
+        # One more member is one more cell, and the rows do not cover it; the spec is refused before the stored checks are looked at.
+        file, text = changed(types, "{ Good, Suspended }", "{ Good, Suspended, Closed }")
+        for command in ("check", "inventory"):
+            self.assertIn(f"{self.LENDS}: the rows must cover each of the 8 combinations of cells; 2 of them have no row", self.run_tool(command, ok=False, extra=extra))
+        file.write_text(text)
+        # The order of the fields is the order of the inputs in every check.
+        file, text = changed(types, "double Fee, double DailyRate", "double DailyRate, double Fee")
+        self.assertIn("STALE", self.run_tool("check", ok=False, extra=extra))
+        file.write_text(text)
+        file, text = changed(self.source, "<= 0 => loan,", "< 0 => loan,")
+        self.assertIn("STALE", self.run_tool("check", ok=False, extra=extra))
+        self.run_tool("inventory", extra=extra)
+        self.assertIn(f"FAIL {self.APPLY}({{DaysLate=0,", self.run_tool("run", ok=False, extra=extra))
+        file.write_text(text)
+        # A file that the selected file does not name changes nothing.
+        changed(ledger, "var unused = 0;", "var unused = 1;")
+        self.assertIn("CURRENT", self.run_tool("check", extra=extra))
+        self.assertIn(f"PASS {self.APPLY} 24 checks (cells)", self.run_tool("run", extra=extra))
+
+    def test_unsupported_code_in_a_project_rejects_with_its_reason(self):
+        # The project's own analyzers warn about a module initializer in a library, and the project turns warnings into errors.
+        extra = self.library(self.PROJECT_PROPERTIES + "<NoWarn>$(NoWarn);CA2255</NoWarn>")
+        types, rules, ledger = (self.source.with_name(name) for name in ("Types.cs", "Rules.cs", "Ledger.cs"))
+        head = "using Library.Model;\nnamespace Library.Rules;\n"
+        place = "enums and records declared in the project"
+        enum_constant = "Ok: a constant of an enum type is admitted only as a named member of that enum"
+        marks = "public static class Marks { public const Standing Hidden = (Standing)7; public const Standing Usual = Standing.Good; }"
+        cases = [
+            # (what is added to the file of the types, the selected file, the expected reason)
+            ("", "[assembly: System.Reflection.AssemblyDescription(\"x\")]\nnamespace Library.Rules;\npublic static class D { public static bool Ok(bool a) => a; }",
+             "REJECTED: extern aliases and assembly attributes are unsupported"),
+            ("", "#nullable enable\n" + head + "public static class D { public static bool Ok(bool a) => a; }", "preprocessor directives are unsupported"),
+            ("", "namespace Library.Rules { extern alias Other; public static class D { public static bool Ok(bool a) => a; } }", "the project does not build:"),
+            ("static class Start { [System.Runtime.CompilerServices.ModuleInitializer] internal static void Run() { } }",
+             head + "public static class D { public static bool Ok(bool a) => a; }",
+             "the project has a module initializer, Library.Model.Start.Run(), which would run before a checked method"),
+            (marks, head + "public static class D { public static bool Ok(Standing s) => s == Marks.Hidden; }", enum_constant),
+            (marks, head + "public static class D { public static bool Ok(Standing s) => Marks.Usual == s; }", enum_constant),
+            (marks, head + "public static class D { public static bool Ok(Standing s) => s is Marks.Hidden; }", enum_constant),
+            (marks, head + "public static class D { public static bool Ok(Standing s) => s switch { Marks.Usual => true, _ => false }; }", enum_constant),
+            (marks, head + "public static class D { public static Standing Ok(bool a) => a ? Marks.Usual : Standing.Good; }", enum_constant),
+            (marks, head + "public static class D { public static Loan Ok(Loan loan) => loan with { Standing = Marks.Usual }; }", "Ok: unsupported expression SimpleMemberAccessExpression"),
+            ("public static class Holder { public enum Inner { A, B } }", head + "public static class D { public static bool Ok(Holder.Inner i) => i == Holder.Inner.A; }",
+             "Inner: an enum or a record that is declared inside another type is not admitted"),
+            ("public static class Holder { public readonly record struct Inner(bool A); }", head + "public static class D { public static bool Ok(Holder.Inner i) => i.A; }",
+             "Inner: an enum or a record that is declared inside another type is not admitted"),
+            ("public record Person(bool Member);", head + "public static class D { public static bool Ok(Person p) => p.Member; }",
+             "Person: only public readonly record structs with ordinary positional fields and no other members are admitted"),
+            ("public readonly record struct Card(bool Member) { public bool Guest => !Member; }", head + "public static class D { public static bool Ok(Card c) => c.Member; }",
+             "Card: only public readonly record structs with ordinary positional fields and no other members are admitted"),
+            ("[System.Flags] public enum Rights { Read = 1, Write = 2 }", head + "public static class D { public static bool Ok(Rights r) => r == Rights.Read; }",
+             "Rights: only public enums without attributes are admitted"),
+            ("public record struct Open(bool Member);", head + "public static class D { public static bool Ok(Open o) => o.Member; }",
+             "Open: only public readonly record structs with ordinary positional fields and no other members are admitted"),
+            ("public enum Tier { A, B } public readonly record struct Card(Tier Tier, System.DateTime Since);", head + "public static class D { public static bool Ok(Card c) => c.Tier == Tier.A; }",
+             "Card: record fields must be bool, integers, double, strings or enums declared in the project"),
+            ("public readonly partial record struct Card(bool Member); public readonly partial record struct Card;", head + "public static class D { public static bool Ok(Card c) => c.Member; }",
+             "Ok: parameters are bool, integers, double, strings, and " + place),
+            ("public sealed class Account { public bool Open; }", head + "public static class D { public static bool Ok(Account a) => a.Open; }",
+             "Ok: parameters are bool, integers, double, strings, and " + place),
+            ("", head + "public static class D { public static bool Ok(System.DayOfWeek day) => day == System.DayOfWeek.Monday; }",
+             "Ok: parameters are bool, integers, double, strings, and " + place),
+            ("", head + "public static class D { public static System.DayOfWeek Ok(bool a) => System.DayOfWeek.Monday; }",
+             "Ok: the result is bool, an enum declared in the project, int, long, double, or the record type of exactly one parameter"),
+            ("public enum Tier { A, B } public readonly record struct Card(Tier Tier, bool Member);",
+             head + "public static class D { public static Card Ok(Card c) => c.Tier == Tier.A ? c with { Member = Limits.Open } : c; }", "Ok: unsupported expression SimpleMemberAccessExpression"),
+        ]
+        ledger.write_text("namespace Library; public sealed class Ledger { }")
+        for added, selected, reason in cases:
+            with self.subTest(added=added, selected=selected):
+                types.write_text(self.PROJECT_TYPES + added)
+                rules.write_text(selected)
+                self.assertIn(reason, self.run_tool("paths", ok=False, extra=extra))
+        types.write_text(self.PROJECT_TYPES)
+
+        # The project compiles with overflow checks: a computed result is refused, a decision is not.
+        checked = self.library(self.PROJECT_PROPERTIES + "<CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>")
+        self.assertIn("the project compiles with overflow checks, and a computed result is checked as arithmetic that wraps", self.run_tool("paths", ok=False, extra=checked))
+        ledger.write_text("namespace Library; public sealed class Ledger { }")
+        rules.write_text(self.PROJECT_RULES.split("public readonly struct LateFee")[0] + "public static class Desk" + self.PROJECT_RULES.split("public static class Desk")[1])
+        spec = self.library_spec()
+        del spec["units"][self.APPLY]
+        self.write_spec(spec)
+        self.run_tool("inventory", extra=checked)
+        self.assertIn(f"PASS {self.LENDS} 6 checks (cells)", self.run_tool("run", extra=checked))
+
+    def test_a_project_that_cannot_be_loaded_rejects_with_its_reason(self):
+        decision = "public static class D { public static bool Ok(bool a) => a; }"
+        one = {"units": {"D.Ok": {"requirement": "The answer is the input.", "parameters": ["a"],
+                                  "rows": [{"input": [True], "outcome": True}, {"input": [False], "outcome": False}], "unsettled": []}}}
+        self.write_spec(one)
+
+        def select(project, file="D.cs"):
+            self.source = project.parent / file
+            return [f"--project={project}"]
+        # Options.
+        extra = select(self.project({"D.cs": decision}, name="Plain"))
+        self.assertIn("--configuration and --framework need --project", self.run_tool("paths", ok=False, extra=["--configuration=Release"]))
+        self.assertIn("--configuration and --framework need --project", self.run_tool("paths", ok=False, extra=["--framework=net10.0"]))
+        self.assertIn("--framework takes one name of letters, digits, dots, hyphens and underscores", self.run_tool("paths", ok=False, extra=extra + ["--framework=net10.0;x"]))
+        self.assertIn("--configuration takes one name of letters, digits, dots, hyphens and underscores", self.run_tool("paths", ok=False, extra=extra + ["--configuration=Release -p:A=1"]))
+        self.assertIn("paths accepts only --source, and --project with its options", self.run_tool("paths", ok=False, extra=extra + [f"--out={self.out}"]))
+        self.assertIn("--project must name an existing .csproj file", self.run_tool("paths", ok=False, extra=[f"--project={self.source}"]))
+        self.assertIn("--project must name an existing .csproj file", self.run_tool("paths", ok=False, extra=[f"--project={self.root / 'Missing.csproj'}"]))
+        outside = self.root / "Outside.cs"
+        outside.write_text(decision)
+        self.source, inside = outside, self.source
+        self.assertIn("--source is not among the files the project compiles", self.run_tool("paths", ok=False, extra=extra))
+        self.source = inside
+        self.run_tool("inventory", extra=extra)
+        self.assertIn("PASS D.Ok 2 checks (every input)", self.run_tool("run", extra=extra))
+        # The options are part of what the stored checks were made with.
+        both = extra + ["--framework=net10.0", "--configuration=Release"]
+        self.assertIn("STALE", self.run_tool("run", ok=False, extra=both))
+        self.assertEqual(self.report(self.run_tool("inventory", extra=both))["project"], {"file": "Plain.csproj", "configuration": "Release", "framework": "net10.0"})
+        self.assertIn("Plain.csproj wrote, configuration Release, framework net10.0, and were run on", self.run_tool("run", extra=both))
+        # A framework the project does not target is refused by the project's own build.
+        self.assertIn("the project does not build:", self.run_tool("paths", ok=False, extra=extra + ["--framework=net8.0"]))
+        # The obligations file may not replace a file of the project.
+        # A new file gets a name that no build reads.
+        for name in ("Extra.cs", "Directory.Build.props", "Directory.Build.rsp"):
+            self.out, out = inside.with_name(name), self.out
+            self.assertIn("--out must name a new file whose name ends with obligations.json", self.run_tool("inventory", ok=False, extra=extra))
+            self.assertFalse(self.out.exists())
+            self.out = out
+        for target in (inside.with_name("Plain.csproj"), inside.with_name("Other.cs")):
+            target.write_text(target.read_text() if target.exists() else "public static class Other { }")
+            kept, self.out, out = target.read_text(), target, self.out
+            self.assertIn("--out must not overwrite a file that is no obligations file", self.run_tool("inventory", ok=False, extra=extra))
+            self.assertEqual(target.read_text(), kept)
+            self.out = out
+        # Code built for another processor type is read and counted, and it is not run: the tool could only say what it does in its own process.
+        extra = select(self.project({"D.cs": decision}, "<PlatformTarget>x86</PlatformTarget>", name="Narrow"))
+        self.run_tool("inventory", extra=extra)
+        self.assertIn("CURRENT", self.run_tool("check", extra=extra))
+        self.assertIn("the project is built for X86, and the tool runs as ", self.run_tool("run", ok=False, extra=extra))
+        # An operator that another file declares for bool is a call of that file's code.
+        extra = select(self.project({"D.cs": "public static class D { public static bool Ok(bool a) => -a; }",
+                                     "Ops.cs": "public static class Ops { extension(bool) { public static bool operator -(bool value) => !value; } }"}, name="Operators"))
+        self.assertIn("Ok: unsupported expression UnaryMinusExpression", self.run_tool("paths", ok=False, extra=extra))
+        # A setting that a step of the build changes is the setting the code is read with.
+        stepped = self.project({"D.cs": "public static class D { public static bool Big(int count) => count > Limits.Most; }",
+                                "Limits.cs": "public static class Limits {\n#if STRICT\n public const int Most = 5;\n#else\n public const int Most = 10;\n#endif\n}"},
+                               items='<Target Name="SetStrict" BeforeTargets="BeforeBuild"><PropertyGroup><DefineConstants>$(DefineConstants);STRICT</DefineConstants></PropertyGroup></Target>',
+                               name="Stepped")
+        self.assertEqual(json.loads(self.run_tool("paths", extra=select(stepped)))["units"][0]["domains"][0]["values"], ["..5", "6.."])
+        # The program the build wrote must be the code the tool compiled. Here a step of the build changes a method of another file
+        # while the compiler runs and puts the old text back afterwards, so the files on disk are not what was built.
+        differs = "the program the build wrote is not what the tool compiles from the files and options of that build; the first difference is in "
+        other = "public static class Other { public static bool Flip(bool a) => a; }"
+        swapped = self.project({"D.cs": decision, "Other.cs": other}, name="Swapped", items=
+                               '<Target Name="Swap" BeforeTargets="CoreCompile"><WriteLinesToFile File="Other.cs" Lines="' + other.replace("=> a;", "=> !a;").replace(";", "%3B") + '" Overwrite="true" /></Target>'
+                               '<Target Name="Back" AfterTargets="CoreCompile"><WriteLinesToFile File="Other.cs" Lines="' + other.replace(";", "%3B") + '" Overwrite="true" /></Target>')
+        self.assertIn(differs + "Other, in its method Flip", self.run_tool("paths", ok=False, extra=select(swapped)))
+        # Here the project reports a compiler option that the compiler never got.
+        reported = self.project({"D.cs": "public static class D { public static bool Big(int count) => count > Limits.Most; }",
+                                 "Limits.cs": "public static class Limits {\n#if REPORTED\n public const int Most = 10;\n#else\n public const int Most = 5;\n#endif\n}"},
+                                items='<ItemGroup><CscCommandLineArgs Include="/define:REPORTED" /></ItemGroup>', name="Reported")
+        self.assertIn(differs, self.run_tool("paths", ok=False, extra=select(reported)))
+        # Here the project compiles with another symbol whenever it is asked for its compiler options, which only the tool does.
+        aware = self.project({"D.cs": "public static class D { public static bool Big(int count) => count > Limits.Most; }",
+                              "Limits.cs": "public static class Limits {\n#if PLAIN\n public const int Most = 5;\n#else\n public const int Most = 10;\n#endif\n}"},
+                             "<DefineConstants Condition=\"'$(ProvideCommandLineArgs)' != 'true'\">$(DefineConstants);PLAIN</DefineConstants>", name="Aware")
+        self.assertIn(differs, self.run_tool("paths", ok=False, extra=select(aware)))
+        # Here the project's own build runs one more step after the usual ones, and that step replaces the program.
+        weaved = self.project({"D.cs": decision}, name="Weaved",
+                              items='<Target Name="Weave"><Copy SourceFiles="../Plain/bin/Debug/net10.0/Plain.dll" DestinationFiles="$(TargetPath)" /></Target>')
+        weaved.write_text(weaved.read_text().replace('<Project Sdk="Microsoft.NET.Sdk">', '<Project Sdk="Microsoft.NET.Sdk" DefaultTargets="Build;Weave">'))
+        self.assertIn(differs, self.run_tool("paths", ok=False, extra=select(weaved)))
+        # A project that writes no program where it says it does leaves nothing to compare with.
+        nowhere = self.project({"D.cs": decision}, "<CopyBuildOutputToOutputDirectory>false</CopyBuildOutputToOutputDirectory>", name="Nowhere")
+        self.assertIn("the build wrote no program at ", self.run_tool("paths", ok=False, extra=select(nowhere)))
+        # A build that maps its folder to another name puts the mapped name into the types a file keeps to itself; the tool maps as the build does.
+        mapped = self.project({"D.cs": decision, "Other.cs": "file static class Hidden { public static int One => 1; }\npublic static class Shown { public static int One => Hidden.One; }"},
+                              "<PathMap>$(MSBuildProjectDirectory)=/sources</PathMap>", name="Mapped")
+        self.assertIn("D.Ok", self.run_tool("paths", extra=select(mapped)))
+        # The generator of a desktop project needs an assembly that lies in another folder than its own.
+        if sys.platform == "win32":
+            desktop = self.project({"D.cs": decision, "Program.cs": "static class Program { [System.STAThread] static void Main() { ApplicationConfiguration.Initialize(); } }"},
+                                   "<UseWindowsForms>true</UseWindowsForms><OutputType>WinExe</OutputType>", name="Desktop", framework="<TargetFramework>net10.0-windows</TargetFramework>")
+            self.assertIn("D.Ok", self.run_tool("paths", extra=select(desktop)))
+        # A property that another file adds to a record is no field of it.
+        extended = self.project({"D.cs": "public static class D { public static Order Ok(Order order) => order with { Bonus = 5 }; }",
+                                 "Order.cs": "public readonly record struct Order(int Count);\n"
+                                             "public static class Orders { extension(Order order) { public int Bonus { get => 0; set { } } } }"}, name="Extended")
+        self.assertIn("Ok: unsupported result SimpleAssignmentExpression", self.run_tool("paths", ok=False, extra=select(extended)))
+
+        # A file that the project compiles from outside its folder is selected by its own path.
+        shared = self.root / "Shared"
+        shared.mkdir()
+        (shared / "Extra.cs").write_text("public static class Extra { public static bool Same(bool a) => a; }")
+        extra = select(self.project({"D.cs": decision}, items='<ItemGroup><Compile Include="../Shared/Extra.cs" /></ItemGroup>', name="Linking"))
+        self.source = shared / "Extra.cs"
+        self.assertIn("Extra.Same", self.run_tool("paths", extra=extra))
+        # The compiler takes a file once when the project names it twice, which only a file system that ignores case allows with two spellings.
+        if sys.platform == "win32":
+            twice = select(self.project({"D.cs": decision}, "<EnableDefaultCompileItems>false</EnableDefaultCompileItems>",
+                                        items='<ItemGroup><Compile Include="D.cs" /><Compile Include="d.cs" /></ItemGroup>', name="Twice"))
+            self.assertIn("D.Ok", self.run_tool("paths", extra=twice))
+        # A space and letters outside ASCII in the names come back unharmed from the build.
+        extra = select(self.project({"Ausleihe é.cs": decision}, name="Bücherei Ünï"), "Ausleihe é.cs")
+        self.run_tool("inventory", extra=extra)
+        self.assertIn("PASS D.Ok 2 checks (every input)", self.run_tool("run", extra=extra))
+
+        # A project that was never restored is restored by the tool's build, as by the project's own.
+        extra = select(self.project({"D.cs": decision}, name="Fresh", restore=False))
+        self.run_tool("inventory", extra=extra)
+        self.assertIn("PASS D.Ok 2 checks (every input)", self.run_tool("run", extra=extra))
+        # A project file that the build cannot read.
+        broken = self.project({"D.cs": decision}, name="Broken", restore=False)
+        broken.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>')
+        self.assertIn("the project does not build:", self.run_tool("paths", ok=False, extra=select(broken)))
+        # Several target frameworks: the build of the project file compiles nothing itself until one is named.
+        extra = select(self.project({"D.cs": decision}, name="Several", framework="<TargetFrameworks>net10.0</TargetFrameworks>"))
+        self.assertIn("the build of this project file runs no C# compiler; for a project with several target frameworks, name one with --framework",
+                      self.run_tool("paths", ok=False, extra=extra))
+        self.run_tool("inventory", extra=extra + ["--framework=net10.0"])
+        self.assertIn("PASS D.Ok 2 checks (every input)", self.run_tool("run", extra=extra + ["--framework=net10.0"]))
+
+        # Code that a generator writes during the build is part of what is compiled.
+        words = 'using System.Text.RegularExpressions; public static partial class Words { [GeneratedRegex("a+")] public static partial Regex Many(); }'
+        extra = select(self.project({"D.cs": decision, "Words.cs": words}, name="Generated"))
+        self.run_tool("inventory", extra=extra)
+        self.assertIn("PASS D.Ok 2 checks (every input)", self.run_tool("run", extra=extra))
+        # The file a generator wrote in an earlier build stays on disk and is no longer part of the code.
+        (self.source.parent / "Words.cs").unlink()
+        self.assertIn("PASS D.Ok 2 checks (every input)", self.run_tool("run", extra=extra))
+        # Generated code can change what a name means: here it declares two constants in a nearer namespace.
+        # The generator takes one of them from a file the project hands it, scaled by a setting of that file and raised by a setting of the decision's file,
+        # and the other from a property of the build; it also writes down the checksums of the file it is handed and of the decision's file.
+        # So the tool has to read the files as the compiler does and hand its own generator run the same files, settings and property.
+        generator = """using Microsoft.CodeAnalysis;
+[Generator]
+public sealed class LimitsGenerator : IIncrementalGenerator
+{
+    public void Initialize(IncrementalGeneratorInitializationContext context)
+    {
+        var most = context.AdditionalTextsProvider.Combine(context.AnalyzerConfigOptionsProvider)
+            .Select((pair, cancel) => (Text: pair.Left.GetText(cancel)!, Scale: pair.Right.GetOptions(pair.Left).TryGetValue("build_metadata.AdditionalFiles.Scale", out var scale) ? scale : "1"))
+            .Select((file, _) => (Value: file.Text.ToString().Trim() + " * " + file.Scale, Sum: Hex(file.Text))).Collect();
+        var root = context.AnalyzerConfigOptionsProvider.Select((options, _) => options.GlobalOptions.TryGetValue("build_property.RootNamespace", out var value) ? value : "");
+        var decision = context.CompilationProvider.Combine(context.AnalyzerConfigOptionsProvider).Select((pair, cancel) =>
+        {
+            var tree = System.Linq.Enumerable.First(pair.Left.SyntaxTrees, each => each.FilePath.EndsWith("D.cs"));
+            return (Bonus: pair.Right.GetOptions(tree).TryGetValue("limits_bonus", out var bonus) ? bonus : "0", Sum: Hex(tree.GetText(cancel)));
+        });
+        context.RegisterSourceOutput(most.Combine(root).Combine(decision), (output, all) => output.AddSource("Limits.g.cs",
+            "namespace Shop.Pricing { public static class Limits { public const int Most = " + all.Left.Left[0].Value + " + " + all.Right.Bonus + "; public const string Root = \\"" + all.Left.Right
+            + "\\"; public const string Sum = \\"" + all.Left.Left[0].Sum + "\\"; public const string Source = \\"" + all.Right.Sum + "\\"; } }"));
+    }
+
+    private static string Hex(Microsoft.CodeAnalysis.Text.SourceText text) => System.Convert.ToHexString(System.Linq.Enumerable.ToArray(text.GetChecksum()));
+}
+"""
+        self.project({"Limits.cs": generator}, "<NoWarn>$(NoWarn);RS1041;RS1036</NoWarn>", name="Writer",
+                     items='<ItemGroup><Reference Include="Microsoft.CodeAnalysis"><HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.dll</HintPath><Private>false</Private></Reference>'
+                           '<Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath><Private>false</Private></Reference></ItemGroup>')
+        shadowed = self.project({"D.cs": "namespace Shop.Pricing { public static class D { public static bool Big(int count, string name) => count > Limits.Most && name == Limits.Root; } }",
+                                 "Limits.cs": 'namespace Shop { public static class Limits { public const int Most = 10; public const string Root = "none"; } }',
+                                 "most.txt": "100\n", ".editorconfig": "root = true\n[D.cs]\nlimits_bonus = 1\n"},
+                                items='<ItemGroup><ProjectReference Include="../Writer/Writer.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />'
+                                      '<AdditionalFiles Include="most.txt" Scale="2" /><CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Scale" /></ItemGroup>',
+                                name="Shadowed")
+        domains = json.loads(self.run_tool("paths", extra=select(shadowed)))["units"][0]["domains"]
+        self.assertEqual([domain["values"] for domain in domains], [["..201", "202.."], ["Shadowed", "#null", "#other"]])
+
+        # A referenced project is built by the build of this one, so its constants are the ones of its source as it is now.
+        core = self.project({"Marker.cs": "namespace Core; public enum Tier { Basic, Gold } public static class Marker { public const bool On = true; }"}, name="Core")
+        uses = self.project({"D.cs": "public static class D { public static bool Ok(bool a) => a && Core.Marker.On; }",
+                             "E.cs": "public static class E { public static bool Gold(Core.Tier tier) => tier == Core.Tier.Gold; }"},
+                            items='<ItemGroup><ProjectReference Include="../Core/Core.csproj" /></ItemGroup>', name="Uses")
+        self.run_tool("inventory", extra=select(uses))
+        self.assertIn("PASS D.Ok 2 checks (every input)", self.run_tool("run", extra=select(uses)))
+        marker = core.parent / "Marker.cs"
+        marker.write_text(marker.read_text().replace("On = true", "On = false"))
+        self.assertIn("FAIL D.Ok(True): expected True, got False", self.run_tool("run", ok=False, extra=select(uses)))
+        # What a referenced project declares is not source of this project.
+        self.assertIn("Gold: parameters are bool, integers, double, strings, and enums and records declared in the project", self.run_tool("paths", ok=False, extra=select(uses, "E.cs")))
+
+    DIFFERS = "the program the build wrote is not what the tool compiles from the files and options of that build; the first difference is in "
+    DECISION = "public static class D { public static bool Ok(bool a) => a; }"
+    # Swaps the methods that the first two properties of an assembly name as their getters; every method stays as it is.
+    SWAPPER = """using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
+
+var bytes = File.ReadAllBytes(args[0]);
+var getters = new List<int>();
+using (var file = new PEReader(new MemoryStream(bytes)))
+{
+    var reader = file.GetMetadataReader();
+    var start = file.PEHeaders.MetadataStartOffset + reader.GetTableMetadataOffset(TableIndex.MethodSemantics);
+    var size = reader.GetTableRowSize(TableIndex.MethodSemantics);
+    for (var row = 0; row < reader.GetTableRowCount(TableIndex.MethodSemantics); row++)
+        if (BitConverter.ToUInt16(bytes, start + row * size) == (ushort)System.Reflection.MethodSemanticsAttributes.Getter) getters.Add(start + row * size + 2);
+}
+// In an assembly with fewer than 65536 methods, a row names its method in two bytes.
+(bytes[getters[0]], bytes[getters[0] + 1], bytes[getters[1]], bytes[getters[1] + 1]) = (bytes[getters[1]], bytes[getters[1] + 1], bytes[getters[0]], bytes[getters[0] + 1]);
+File.WriteAllBytes(args[1], bytes);
+"""
+
+    def built(self, name, files, properties=""):
+        """Builds a project of its own and returns the path of the program its build wrote."""
+        project = self.project(files, properties, name=name)
+        subprocess.run(["dotnet", "build", "--nologo"], cwd=project.parent, check=True, capture_output=True, **HIDDEN)
+        return project.parent / "bin/Debug/net10.0" / f"{name}.dll"
+
+    def replaced(self, name, files, program):
+        """A project whose own build ends by putting another program where the compiler wrote this one's; returns the option that names the project."""
+        project = self.project(files, name=name, items=f'<Target Name="Weave"><Copy SourceFiles="{program.as_posix()}" DestinationFiles="$(TargetPath)" /></Target>')
+        project.write_text(project.read_text().replace('<Project Sdk="Microsoft.NET.Sdk">', '<Project Sdk="Microsoft.NET.Sdk" DefaultTargets="Build;Weave">'))
+        self.source = project.parent / "D.cs"
+        return [f"--project={project}"]
+
+    def test_a_project_whose_program_differs_in_one_place_from_its_files_is_refused(self):
+        # Each case: the project's own code, the code of the program its build puts in place instead, where the comparison finds the first difference,
+        # and a property of the other program's project.
+        cases = {
+            "Operand": ("public static class E { public static bool Big(int count) => count > 50; }",
+                        "public static class E { public static bool Big(int count) => count > 51; }", "E, in its method Big", ""),
+            "Text": ('public static class E { public static bool Named(string name) => name == "a"; }',
+                     'public static class E { public static bool Named(string name) => name == "b"; }', "E, in its method Named", ""),
+            "Called": ("public static class E { public static int Low(int a) => a; public static int High(int a) => a + 1; public static int Pick(int a) => Low(a); }",
+                       "public static class E { public static int Low(int a) => a; public static int High(int a) => a + 1; public static int Pick(int a) => High(a); }",
+                       "E, in its method Pick", ""),
+            "Field": ("public static class E { public static int Kept; }", "public static class E { public static int Kept; public static int Spare; }", "E, in its field Spare", ""),
+            "Constant": ("public static class E { public const int Most = 5; }", "public static class E { public const int Most = 6; }", "E, in its field Most", ""),
+            # Whether a method clears its locals stands in the method's header, and an attribute of the module turns it off.
+            "Cleared": ("public static class E { public static int Sum(int a) { var b = a + 1; return b; } }",
+                        "[module: System.Runtime.CompilerServices.SkipLocalsInit]\npublic static class E { public static int Sum(int a) { var b = a + 1; return b; } }",
+                        "E, in its method Sum", "<AllowUnsafeBlocks>true</AllowUnsafeBlocks>"),
+            "Missing": ("public static class E { }\nstatic class Spare { }", "public static class E { }", "Spare, which the built program does not have", ""),
+        }
+        for name, (own, other, place, properties) in cases.items():
+            with self.subTest(name):
+                program = self.built("Other" + name, {"D.cs": self.DECISION, "E.cs": other}, properties)
+                self.assertIn(self.DIFFERS + place, self.run_tool("paths", ok=False, extra=self.replaced(name, {"D.cs": self.DECISION, "E.cs": own}, program)))
+        # Here the program has the same methods as the project's code, and its two properties name each other's getter.
+        # Code that reads a property by its name, as the tool reads the parts of a result, would get the other part.
+        record = {"D.cs": self.DECISION, "E.cs": "public sealed class Pair { public int Total { get; init; } public int Price { get; init; } }"}
+        program = self.built("OtherPair", record)
+        swapper = self.root / "Swapper"
+        swapper.mkdir()
+        (swapper / "global.json").write_text((HERE / "global.json").read_text())
+        (swapper / "Swap.cs").write_text(self.SWAPPER)
+        swapped = program.with_name("Swapped.dll")
+        subprocess.run(["dotnet", "run", "Swap.cs", "--", str(program), str(swapped)], cwd=swapper, check=True, capture_output=True, **HIDDEN)
+        self.assertIn(self.DIFFERS + "Pair, in its property Price", self.run_tool("paths", ok=False, extra=self.replaced("Pair", record, swapped)))
+
+    def test_a_project_built_in_a_way_the_tool_cannot_compare_or_run_is_refused(self):
+        def select(project):
+            self.source = project.parent / "D.cs"
+            return [f"--project={project}"]
+        # A reference assembly has the declarations of a program and none of its code.
+        contract = self.project({"D.cs": self.DECISION}, "<ProduceOnlyReferenceAssembly>true</ProduceOnlyReferenceAssembly>", name="Contract")
+        self.assertIn("the build of this project writes only a reference assembly, which has no code to run", self.run_tool("paths", ok=False, extra=select(contract)))
+        # Instrumented code starts every method with a call of the project's own counting code.
+        counting = """namespace Microsoft.CodeAnalysis.Runtime
+{
+    public static class Instrumentation
+    {
+        public static bool[] CreatePayload(System.Guid mvid, int methodToken, int fileIndex, ref bool[] payload, int payloadLength) => payload ??= new bool[payloadLength];
+        public static bool[] CreatePayload(System.Guid mvid, int methodToken, int[] fileIndices, ref bool[] payload, int payloadLength) => payload ??= new bool[payloadLength];
+        public static void FlushPayload() { }
+    }
+}
+"""
+        counted = self.project({"D.cs": self.DECISION, "Counting.cs": counting}, "<Instrument>TestCoverage</Instrument>", name="Counted")
+        self.assertIn("the build of this project instruments its code (TestCoverage), so every method calls code that was never admitted",
+                      self.run_tool("paths", ok=False, extra=select(counted)))
+        # Here the compile step of the project copies a program that was built elsewhere.
+        program = self.built("Elsewhere", {"D.cs": self.DECISION})
+        copied = self.project({"D.cs": self.DECISION}, name="Copied")
+        copied.write_text('<Project><Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />'
+                          '<PropertyGroup><TargetFramework>net10.0</TargetFramework><ProduceReferenceAssembly>false</ProduceReferenceAssembly></PropertyGroup>'
+                          f'<Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" /><Target Name="CoreCompile"><Copy SourceFiles="{program.as_posix()}" DestinationFiles="@(IntermediateAssembly)" /></Target></Project>')
+        self.assertIn("the build of this project file runs no C# compiler", self.run_tool("paths", ok=False, extra=select(copied)))
+        # Here the project leaves a file out whenever the compiler is not to run, which only the tool's question to the build asks for.
+        hidden = self.project({"D.cs": "public static class D { public static bool Ok(bool a) => N.Yes && a; }", "N.cs": "public static class N { public const bool Yes = true; }"},
+                              items="<ItemGroup><Compile Remove=\"N.cs\" Condition=\"'$(SkipCompilerExecution)' == 'true'\" /></ItemGroup>", name="Hidden")
+        refused = self.run_tool("paths", ok=False, extra=select(hidden))
+        self.assertIn("the project builds, and the tool's compiler finds errors in the same files; 1 errors, the first of them:", refused)
+        self.assertIn("error CS0103: The name 'N' does not exist in the current context", refused)
+        # A build that cannot start has no error lines, and its last lines say why.
+        unstarted = self.project({"D.cs": self.DECISION}, name="Unstarted", restore=False)
+        (unstarted.parent / "global.json").write_text('{"sdk": {"version": "99.0.100", "rollForward": "disable"}}')
+        refused = self.run_tool("paths", ok=False, extra=select(unstarted))
+        self.assertIn("the project does not build:", refused)
+        self.assertIn("99.0.100", refused)
+        # A build with many errors repeats the last of them at its end; the refusal names the first ones.
+        many = self.project({"D.cs": self.DECISION, "E.cs": "public static class E {" + "".join(f" public static int F{n:02d}() => Missing{n:02d};" for n in range(1, 13)) + " }"},
+                            name="Many", restore=False)
+        refused = self.run_tool("paths", ok=False, extra=select(many))
+        self.assertIn("the project does not build:", refused)
+        self.assertIn("Missing01", refused)
+
+    def test_a_project_for_dotnet_framework_is_refused(self):
+        project = self.project({"D.cs": self.DECISION}, name="Classic", framework="<TargetFramework>net472</TargetFramework>", restore=False)
+        if subprocess.run(["dotnet", "restore", "--nologo"], cwd=project.parent, capture_output=True, **HIDDEN).returncode != 0:
+            self.skipTest("the reference assemblies of .NET Framework 4.7.2 cannot be restored here")
+        self.source = project.parent / "D.cs"
+        extra = [f"--project={project}"]
+        self.write_spec({"units": {"D.Ok": {"requirement": "The answer is the input.", "parameters": ["a"],
+                                            "rows": [{"input": [True], "outcome": True}, {"input": [False], "outcome": False}], "unsettled": []}}})
+        self.run_tool("inventory", extra=extra)
+        self.assertIn("the project targets .NET Framework, where the same arithmetic can give another number than on the tool's runtime; the tool does not run its code",
+                      self.run_tool("run", ok=False, extra=extra))
+
+    def test_a_project_with_debug_information_inside_its_program_or_a_reference_by_a_relative_path_is_compared_as_built(self):
+        # The compiler writes other instructions when it writes debug information, here into the program itself.
+        project = self.project({"D.cs": self.DECISION}, "<DebugType>embedded</DebugType>", name="Embedded")
+        self.source = project.parent / "D.cs"
+        self.assertIn("D.Ok", self.run_tool("paths", extra=[f"--project={project}"]))
+        # A step of this build hands the compiler a reference by a path relative to the project's folder.
+        program = self.built("Core", {"Marker.cs": "namespace Core; public static class Marker { public const bool On = true; }"})
+        project = self.project({"D.cs": "public static class D { public static bool Ok(bool a) => a && Core.Marker.On; }"}, name="Relative",
+                               items='<Target Name="Lend" BeforeTargets="CoreCompile"><ItemGroup>'
+                                     f'<ReferencePathWithRefAssemblies Include="../Core/bin/Debug/net10.0/{program.name}" /></ItemGroup></Target>')
+        self.source = project.parent / "D.cs"
+        self.assertIn("D.Ok", self.run_tool("paths", extra=[f"--project={project}"]))
+
+    def test_a_project_is_built_once_and_asked_for_its_compiler_options_without_compiling(self):
+        # The referenced project notes each build of its own; only the project's own build may build it.
+        core = self.project({"Marker.cs": "namespace Core; public static class Marker { public const bool On = true; }"}, name="Core",
+                            items='<Target Name="Note" AfterTargets="Build"><WriteLinesToFile File="builds.txt" Lines="built" /></Target>')
+        uses = self.project({"D.cs": "public static class D { public static bool Ok(bool a) => a && Core.Marker.On; }"},
+                            items='<ItemGroup><ProjectReference Include="../Core/Core.csproj" /></ItemGroup>', name="Uses")
+        self.source = uses.parent / "D.cs"
+        extra = [f"--project={uses}"]
+        notes = core.parent / "builds.txt"
+        self.run_tool("paths", extra=extra)
+        self.assertEqual(notes.read_text().split(), ["built"])
+        # Once the project is built, its build compiles nothing again, and neither does the tool's question to it.
+        program = uses.parent / "obj/Debug/net10.0/Uses.dll"
+        written = program.stat().st_mtime_ns
+        self.run_tool("paths", extra=extra)
+        self.assertEqual(notes.read_text().split(), ["built", "built"])
+        self.assertEqual(program.stat().st_mtime_ns, written)
+
+    def test_source_files_are_read_in_the_code_page_of_the_project(self):
+        project = self.project({}, "<CodePage>28591</CodePage>", name="Latin")
+        self.source = project.parent / "D.cs"
+        self.source.write_bytes('public static class D { public static bool Ok(string name) => name == "\u00e9"; }'.encode("latin-1"))
+        values = json.loads(self.run_tool("paths", extra=[f"--project={project}"]))["units"][0]["domains"][0]["values"]
+        self.assertEqual(values, ["\u00e9", "#null", "#other"])
+        # Without a code page the compiler would read the file in a code page of the machine, which the tool does not guess.
+        self.project({}, name="Latin", restore=False)
+        self.assertIn("D.cs is not valid UTF-8 and the project names no code page, so the tool does not know how the compiler reads it",
+                      self.run_tool("paths", ok=False, extra=[f"--project={project}"]))
+
+    def test_a_signed_project_is_compiled_with_its_key(self):
+        keys = self.root / "Keys"
+        keys.mkdir()
+        (keys / "global.json").write_text((HERE / "global.json").read_text())
+        # Writes a new key pair and prints its public key in the form a friend declaration names it.
+        (keys / "keys.cs").write_text("var key = new System.Security.Cryptography.RSACryptoServiceProvider(2048);\n"
+                                      "System.IO.File.WriteAllBytes(args[0], key.ExportCspBlob(true));\n"
+                                      "var open = key.ExportCspBlob(false);\n"
+                                      "open[5] = 0x24; // A strong name states the key as a signing key, whatever the key pair was made for.\n"
+                                      "System.Console.Write(System.Convert.ToHexString([0, 0x24, 0, 0, 4, 0x80, 0, 0, .. System.BitConverter.GetBytes(open.Length), .. open]));\n")
+        signed = "<SignAssembly>true</SignAssembly><AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>"
+        project = self.project({"D.cs": "public static class D { public static int Next(int a) => a + 1; }"}, signed, name="Signed", restore=False)
+        public = subprocess.run(["dotnet", "run", "keys.cs", "--", str(project.parent / "key.snk")], cwd=keys, check=True, capture_output=True, text=True, **HIDDEN).stdout.split()[-1]
+        # A signed project may read what a signed library keeps for its friends; without the key the name below would mean the constant 10.
+        signed_as = signed.replace("key.snk", "../Signed/key.snk")
+        self.project({"Base.cs": f'[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Friend, PublicKey={public}")]\n'
+                                 "public class Base { internal const int Most = 100; }"}, signed_as, name="Kept", restore=False)
+        friend = self.project({"D.cs": "public static class D { public static bool Big(int count) => count > Defaults.Limits.Threshold; }",
+                               "Defaults.cs": "public static class Defaults { public const int Most = 10; public class Limits : Base { public const int Threshold = Most; } }"},
+                              signed_as, items='<ItemGroup><ProjectReference Include="../Kept/Kept.csproj" /></ItemGroup>', name="Friend", restore=False)
+        self.source = friend.parent / "D.cs"
+        self.assertEqual(json.loads(self.run_tool("paths", extra=[f"--project={friend}"]))["units"][0]["domains"][0]["values"], ["..100", "101.."])
+        self.source = project.parent / "D.cs"
+        self.write_spec({"units": {"D.Next": {"requirement": "The next number.", "parameters": ["a"], "domains": {"a": [".."]},
+                                              "rows": [{"input": ["#any"], "outcome": "a + 1"}], "unsettled": []}}})
+        self.run_tool("inventory", extra=[f"--project={project}"])
+        for way in ("", "<PublicSign>true</PublicSign>", "<DelaySign>true</DelaySign>"):
+            with self.subTest(way=way):
+                self.project({}, signed + way, name="Signed", restore=False)
+                self.assertIn("PASS D.Next 2 checks (cells)", self.run_tool("run", extra=[f"--project={project}"]))
+
+    @unittest.skipUnless(any(line.startswith("11.") for line in subprocess.run(["dotnet", "--list-sdks"], capture_output=True, text=True, **HIDDEN).stdout.splitlines()),
+                         "needs a .NET 11 SDK next to the .NET 10 SDK that builds the tool")
+    def test_a_project_for_a_newer_language_or_runtime_is_refused(self):
+        project = self.project({"D.cs": "public static class D { public static bool Ok(bool a) => a; }"}, name="Newer",
+                               framework="<TargetFramework>net11.0</TargetFramework>", restore=False)
+        (project.parent / "global.json").write_text('{"sdk": {"version": "10.0.100", "rollForward": "latestMajor", "allowPrerelease": true}}')
+        subprocess.run(["dotnet", "restore", "--nologo"], cwd=project.parent, check=True, capture_output=True, **HIDDEN)
+        self.source = project.parent / "D.cs"
+        extra = [f"--project={project}"]
+        self.write_spec({"units": {"D.Ok": {"requirement": "The answer is the input.", "parameters": ["a"],
+                                            "rows": [{"input": [True], "outcome": True}, {"input": [False], "outcome": False}], "unsettled": []}}})
+        # The build asks for the language of its own SDK, which the compiler of the tool does not know.
+        newer = self.run_tool("paths", ok=False, extra=extra)
+        self.assertIn("the tool's compiler does not accept the project's compiler options:", newer)
+        self.assertIn("/langversion", newer)
+        # With a language the tool knows, the code is read and counted, and it is not run on the older runtime.
+        project.write_text(project.read_text().replace("</TargetFramework>", "</TargetFramework><LangVersion>14</LangVersion>"))
+        self.run_tool("inventory", extra=extra)
+        self.assertIn("CURRENT", self.run_tool("check", extra=extra))
+        self.assertIn("the project targets .NET 11, and the tool runs on .NET 10, which cannot run its code", self.run_tool("run", ok=False, extra=extra))
+
+    def test_an_obligations_file_in_another_layout_is_current(self):
+        # A formatter may rewrite the file's layout; the data in it is what the check compares.
+        self.run_tool("inventory")
+        self.out.write_text(json.dumps(json.loads(self.out.read_text(encoding="utf-8"))), encoding="utf-8")
+        self.assertIn("CURRENT obligations", self.run_tool("check"))
+
+    def test_a_method_with_the_name_of_a_method_every_object_has_is_called_itself(self):
+        self.source.write_text("public static class Rules { public static bool Equals(bool member) => member; public static bool ToString(bool member) => !member; }")
+        rows = lambda flip: {"requirement": "A yes or no.", "parameters": ["member"], "unsettled": [],
+                             "rows": [{"input": [True], "outcome": not flip}, {"input": [False], "outcome": flip}]}
+        self.write_spec({"units": {"Rules.Equals": rows(False), "Rules.ToString": rows(True)}})
+        self.run_tool("inventory")
+        result = self.run_tool("run")
+        self.assertIn("PASS Rules.Equals 2 checks (every input)", result)
+        self.assertIn("PASS Rules.ToString 2 checks (every input)", result)
+
+    def test_a_method_with_the_name_of_the_added_method_is_left_alone(self):
+        # The method the tool adds for Fee cannot be called VerifiableSiteOfFee here, and the next name it tries is the first choice for Fee_.
+        self.source.write_text("public static class Rules { public static int Fee(int count) => count + 1; "
+                               "public static bool VerifiableSiteOfFee(bool member) => member; public static int Fee_(int count) => count + 2; }")
+        number = lambda formula: {"requirement": "A number.", "parameters": ["count"], "domains": {"count": [".."]}, "rows": [{"input": ["#any"], "outcome": formula}], "unsettled": []}
+        self.write_spec({"units": {"Rules.Fee": number("count + 1"), "Rules.Fee_": number("count + 2"), "Rules.VerifiableSiteOfFee": {
+            "requirement": "The answer is the input.", "parameters": ["member"],
+            "rows": [{"input": [True], "outcome": True}, {"input": [False], "outcome": False}], "unsettled": []}}})
+        self.run_tool("inventory")
+        result = self.run_tool("run")
+        for line in ("PASS Rules.Fee 2 checks (cells)", "PASS Rules.VerifiableSiteOfFee 2 checks (every input)", "PASS Rules.Fee_ 2 checks (cells)"):
+            self.assertIn(line, result)
+        self.source.write_text(self.source.read_text().replace("count + 2", "count + 3"))
+        self.run_tool("inventory")
+        self.assertIn("FAIL Rules.Fee_(-2147483648): the code computes count + 3, and the spec states count + 2", self.run_tool("run", ok=False))
+
     def test_unsupported_command_and_output_collision(self):
         self.assertIn("unsupported command", self.run_tool("prune", ok=False))
         self.assertIn("paths accepts only --source", self.run_tool("paths", ok=False, extra=[f"--spec={self.spec}"]))
@@ -1983,6 +2751,14 @@ public static class Plain
                 self.out = target
                 self.assertIn("overwrite", self.run_tool("inventory", ok=False))
         self.assertEqual(self.spec.read_text(), spec_text)
+        # A file that only looks like the tool's own is kept as well.
+        self.out = self.root / "other.json"
+        for kept in ('{"schema": "other/1"}', '{"schema": 7}', '["verifiable.csharp/7"]', ""):
+            self.out.write_text(kept)
+            self.assertIn("--out must not overwrite a file that is no obligations file", self.run_tool("inventory", ok=False))
+            self.assertEqual(self.out.read_text(), kept)
+        self.out.write_text('{"schema": "verifiable.csharp/1"}')
+        self.run_tool("inventory")
         self.source = self.source.with_suffix(".txt")
         self.source.write_text((SKILL / "assets/csharp/Decision.cs").read_text(), encoding="utf-8")
         self.assertIn("must name a .cs file", self.run_tool("paths", ok=False))
@@ -1991,7 +2767,9 @@ public static class Plain
         tool = json.loads(self.run_tool("capabilities"))
         profile = json.loads((SKILL / "scripts/capabilities.json").read_text())["csharp"]
         self.assertEqual(tool["shapes"], profile["shapes"])
-        self.assertIn("project-loading", tool["unsupported"])
+        self.assertNotIn("project-loading", tool["unsupported"])
+        self.assertNotIn("generated-code", tool["unsupported"])
+        self.assertIn("solution-loading", tool["unsupported"])
         for command, status in profile["commands"].items():
             if status == "unsupported":
                 self.assertIn(command, tool["unsupported"])

@@ -83,15 +83,15 @@ node <skill>/scripts/diagnose.ts <file.ts> [--at=<a line inside the function>] [
 Reads one file with the project's TypeScript configuration. It changes nothing. A relative file is looked for in the working directory, then under `--root`. `--at` selects the innermost named function that holds the line, and says so when none does. Per function:
 
 - a summary line: exits, how many are reached only through decidable conditions, branch points, how many are decidable, merged failure sites, effects, outside reads;
-- `exit <n> line <l> <return|throw|may throw> <text> [decidable|open]` with `when <conditions>`;
+- `exit <n> line <l> <return|throw|may throw|yield> <text> [decidable|open]` with `when <conditions>`; a `yield` is an exit like a return;
 - `decided line <l> <construct> <condition>`: a branch that finite inputs decide. `(number cell)` after the construct means a number compared with a literal, which a number classifier counts;
-- `open line <l> <construct> <condition>` with `depends on <what>`: an open input with its type, a library or project call, state read from outside, a thrown value, a clock or random read, or an `untraced variable` (one declared with `let`, or without a value, whose content the tool does not follow);
+- `open line <l> <construct> <condition>` with `depends on <what>`: an open input with its type, a library or project call, state read from outside, a thrown value, a clock or random read, an `untraced variable` (one declared with `let`, or without a value, whose content the tool does not follow), or a `loop item`;
 - `merge line <l> ...`: several failure causes become one value;
 - `effect line <l> ...`: an effect inside the logic;
-- `reshape`: one step per finding, each naming the shape it leads to. A step that starts with `no shape` names code that no shape admits;
+- `reshape`: one step per finding, each naming the shape it leads to. A step that starts with `no shape` names code that no shape admits: a loop, a generator, an input that is a collection, or text built from a value;
 - `given` and `scoped` lines, and exits marked `[not taken if the contract holds]`, when a library contract applies (`references/typescript/contracts.md`). These rest on a declaration.
 
-It reads one file at a time, reports local helpers separately, and follows values through `const` only; a branch on any other variable is reported as open. An `if` with `a || b` is one branch point for the whole condition and one for its left side, so the same comparison can appear under `open` as part of the whole and under `decided` on its own.
+It reads one file at a time, reports local helpers separately, reports a function without a name on its own when no reported function holds it (as `(function passed to <call>)`, such as a handler given to `process.on`), and follows values through `const` only; a branch on any other variable is reported as open. An `if` with `a || b` is one branch point for the whole condition and one for its left side, so the same comparison can appear under `open` as part of the whole and under `decided` on its own.
 
 ## The entry file and the driver
 

@@ -39,6 +39,31 @@ It is neither a proof of the checker nor evidence for any unimplemented shape.
 
 This profile relies on the primary links above and the bundled regressions.
 
+## What checking inside a project rests on
+
+The tool builds the project, compiles it again from the compiler command line of that build, and accepts its own compilation only when the program the build wrote has the same code.
+Observed in runs on Windows with SDK 10.0.400 on 2026-11-14, on sample projects without package references:
+
+- After a plain `dotnet build`, `dotnet msbuild <project> -t:BeforeBuild;Compile -p:ProvideCommandLineArgs=true -p:SkipCompilerExecution=true -p:NonExistentFile=<a path that does not exist> -p:BuildProjectReferences=false -getItem:CscCommandLineArgs -getProperty:TargetPath` returned the compiler's command line and the path of the built program on every run, and compiled nothing.
+  Without `NonExistentFile` it returned no argument once the output was up to date, because the compile step was skipped.
+- `CSharpCommandLineParser.Default.Parse`, from the compiler assembly the SDK ships, read that command line without an error.
+- The tool's compilation had the same listing as the built program for a library, a program with an entry point, a signed library, a `Release` build, and two projects that use the generators for regular expressions and JSON that ship with .NET.
+  For that, the tool has to write debug information where the build does, has to give its generator run the folder the compiler would write generated files to, because that folder goes into the names of generated types, and has to read the files it hands to generators with the checksum the build names.
+  The standard templates for a web application with Razor pages and for a Windows Forms application compared equal as well, and so did builds with a path mapping.
+- The listings differed, and the tool refused, when a build step rewrote a source file while the compiler ran, when a step replaced the assembly after the compiler, and when the project reported a compiler option the compiler never got.
+
+Three earlier designs of this option were broken by independent checks on 2026-11-14.
+The first asked the build only for its command line and compiled nothing for real; the second built for real and trusted its own second compilation without looking at the built program.
+The third compared with the built program, but built it with properties of its own and with the target `Build` only, and left the headers of methods out of the listing; a third check got a passing run from a project whose build runs one more target, from a project that tests for the tool's property, and from a rewritten method header.
+Together the three gave a passing run in eighteen situations where the built program behaved otherwise, among them a build step that changes a setting, generated code, an outdated referenced project, an unsigned compilation of a signed project, and a package version changed without a restore.
+With the present design, each of those reproductions is read as the built program behaves, or refused.
+
+`NonExistentFile` is a property of the build's own targets: the compiler platform's project loader notes that setting `BuildingInsideVisualStudio` sets it indirectly, in [ProjectBuildManager.cs](https://github.com/dotnet/roslyn/blob/f1160585559cf85088006e09be844e7ff224ecae/src/Workspaces/MSBuild/BuildHost/Build/ProjectBuildManager.cs), read on 2026-11-14.
+No documentation page that states this property as a supported interface was found.
+Properties and events are in the listing with the methods they name, since a program whose properties name each other's getters had the same methods and the same instructions as its source.
+Not established: whether two programs can have the same listing and compute differently through something the listing leaves out (attributes, resources, data that instructions point to); whether a project that deliberately tells the tool another output path than the one it ships can be told apart; how often the tool's compiler and a project's compiler write different instructions; projects with package references, F# or Visual Basic projects, projects of the old non-SDK format; and whether a released .NET 11 SDK behaves as its release candidate did.
+The one run on .NET Framework that was compared: a 32-bit `net472` program returned `1E+308` for `x * 10.0 / 10.0` at `1e308`, where .NET 10 returns infinity; this is why the tool does not run code that targets .NET Framework.
+
 ## What a computed result rests on
 
 The claim for a computed result is that the code computes the spec's formula for every value of a cell.
@@ -63,6 +88,6 @@ Preview language features are outside the C# 14 admission vocabulary.
 3. Plant faults and show which computed obligations detect them; preserve unknown results.
 4. Update the implementation, capabilities, language reference and scope statement together.
 
-Project loading, `Math` functions, tolerances, `float` and `decimal`, adapters and test-runner integration are separate
+Solution loading, `Math` functions, tolerances, `float` and `decimal`, adapters and test-runner integration are separate
 capabilities. Reconciliation requires observing and changing reached cells under individual
 tests; a passing suite or mutation score cannot stand in for that mechanism.

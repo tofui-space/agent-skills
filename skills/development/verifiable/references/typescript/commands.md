@@ -12,10 +12,12 @@ Read-only. It answers: can the checks of this code be counted, and if not, what 
    - where the count exists, the number of checks;
    - otherwise each `open` branch with what it depends on, in the tool's words, and the reshape steps;
    - every `no shape` step, by name. It means that part of the function cannot be counted in any shape, so the answer to "can this be counted" is "not all of it", whatever the other steps say;
-   - what the next step would cost: `:coverage` rewrites the function in a copy, needs one spec per unit that a person reviews, and needs a review of the rewrite.
+   - what the next step would cost: `:apply` rewrites the function in a copy, needs one spec per unit that a person reviews, and needs a review of the rewrite.
    Do not turn an open branch into a number by estimating.
 
-## `/verifiable:coverage`
+## `/verifiable:apply`
+
+`:coverage` is its former name.
 
 Follow [the shared workflow](../coverage.md) and [the TypeScript procedure](coverage.md).
 The TypeScript procedure is the authoritative source for setup, execution, reconciliation
