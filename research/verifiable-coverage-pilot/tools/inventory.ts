@@ -149,6 +149,9 @@ export type Guard = {
 export type Violation = { file: string; line: number; rule: string }
 export type Partition = 'code' | 'code+spec'
 
+/** Thrown while listing a type's values once the list passes the domain limit. */
+class Oversized extends Error {}
+
 const loops = new Set([
   ts.SyntaxKind.ForStatement,
   ts.SyntaxKind.ForInStatement,
@@ -351,16 +354,21 @@ export async function computeInventory(options: {
       ts.forEachChild(node, (child) => walk(child, visit))
     }
 
+    // A record's values are every combination of its properties' values, so a list longer than the
+    // domain limit is abandoned while it is built: building it whole can exhaust the heap first.
     const finiteValues = (type: ts.Type, depth = 0): Value[] | undefined => {
       if (type.flags & ts.TypeFlags.BooleanLiteral)
         return [checker.typeToString(type) === 'true']
       if (type.isStringLiteral()) return [type.value]
       if (type.isUnion()) {
         const parts = type.types.map((part) => finiteValues(part, depth))
-        return parts.every((part) => part !== undefined)
-          ? parts.flat()
-          : undefined
+        if (!parts.every((part) => part !== undefined)) return undefined
+        const flat = parts.flat()
+        if (flat.length > options.maxDomain) throw new Oversized()
+        return flat
       }
+      if (checker.isArrayType(type) || checker.isTupleType(type))
+        return undefined
       const isPlainObject =
         Boolean(type.flags & ts.TypeFlags.Object) &&
         checker.getSignaturesOfType(type, ts.SignatureKind.Call).length === 0 &&
@@ -375,11 +383,23 @@ export async function computeInventory(options: {
           depth + 1,
         )
         if (!values) return undefined
+        if (records.length * values.length > options.maxDomain)
+          throw new Oversized()
         records = records.flatMap((r) =>
           values.map((v) => ({ ...r, [prop.name]: v })),
         )
       }
       return records
+    }
+
+    // The values of a type, undefined when it is not finite, or 'oversized' past the domain limit.
+    const valuesOf = (type: ts.Type): Value[] | undefined | 'oversized' => {
+      try {
+        return finiteValues(type)
+      } catch (error) {
+        if (error instanceof Oversized) return 'oversized'
+        throw error
+      }
     }
 
     const isNumberLike = (type: ts.Type): boolean =>
@@ -705,9 +725,15 @@ export async function computeInventory(options: {
         const name = statement.name.text
         const signature = checker.getSignatureFromDeclaration(fn)
         if (!signature) continue
-        const outcomes =
-          finiteValues(checker.getReturnTypeOfSignature(signature)) ?? []
-        if (outcomes.length === 0) flag(fn, 'return type is not a finite union')
+        const returned = valuesOf(checker.getReturnTypeOfSignature(signature))
+        const outcomes = Array.isArray(returned) ? returned : []
+        if (returned === 'oversized')
+          flag(
+            fn,
+            `return type has more than ${options.maxDomain} values; split it into smaller finite types`,
+          )
+        else if (outcomes.length === 0)
+          flag(fn, 'return type is not a finite union')
         pureBody(fn)
 
         if (shape === 'decisions') {
@@ -719,7 +745,9 @@ export async function computeInventory(options: {
           const record =
             params.length === 1 &&
             first !== undefined &&
-            Boolean(first.type.flags & ts.TypeFlags.Object)
+            Boolean(first.type.flags & ts.TypeFlags.Object) &&
+            !checker.isArrayType(first.type) &&
+            !checker.isTupleType(first.type)
           const dimensions: Dimension[] = []
           const sources =
             record && first
@@ -729,8 +757,22 @@ export async function computeInventory(options: {
                 }))
               : params
           for (const input of sources) {
-            const values = finiteValues(input.type)
-            if (values) dimensions.push({ name: input.name, values })
+            const values = valuesOf(input.type)
+            if (Array.isArray(values))
+              dimensions.push({ name: input.name, values })
+            else if (values === 'oversized')
+              flag(
+                fn,
+                `input ${input.name} has more than ${options.maxDomain} values; split into decisions joined by an intermediate finite type`,
+              )
+            else if (
+              checker.isArrayType(input.type) ||
+              checker.isTupleType(input.type)
+            )
+              flag(
+                fn,
+                `input ${input.name} is a list, which no decision takes; decide one item and leave the loop in a file outside the claim`,
+              )
             else flag(fn, `input ${input.name} is not a finite union`)
           }
           const signatures = dimensions.map((d) =>

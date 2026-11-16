@@ -618,6 +618,65 @@ function withLooks(a: Alternative, items: readonly RegexNode[]): string {
   return `(re.++ ${left} ${rest})`
 }
 
+/**
+ * The length bounds, the anchors and the repeated class of a pattern that is one character
+ * class repeated, such as `^[0-9a-f]{64}$`; undefined for every other pattern.
+ * The solver runs out of memory on a long counted repeat of a class inside the cell questions,
+ * so such a pattern is asked as a length and a class instead, which describes the same strings.
+ */
+export function classRun(parsed: ParsedRegex):
+  | {
+      star: ParsedRegex
+      min: number
+      max: number | undefined
+      fromStart: boolean
+      toEnd: boolean
+    }
+  | undefined {
+  const only =
+    parsed.alternatives.length === 1 ? parsed.alternatives[0] : undefined
+  if (!only) return undefined
+  const body =
+    only.body.kind === 'seq' && only.body.items.length === 1
+      ? only.body.items[0]
+      : only.body
+  if (body?.kind !== 'repeat' || body.item.kind !== 'set') return undefined
+  const star: RegexNode = {
+    kind: 'repeat',
+    item: body.item,
+    min: 0,
+    max: undefined,
+  }
+  return {
+    star: { alternatives: [{ fromStart: true, toEnd: true, body: star }] },
+    min: body.min,
+    max: body.max,
+    fromStart: only.fromStart,
+    toEnd: only.toEnd,
+  }
+}
+
+/**
+ * The strings whose first `n` characters (or last, with `fromStart` false) all lie in the class
+ * of `run`, written with repeats of any character only: at least `n` characters, and no
+ * character outside the class among those `n`.
+ */
+export function classEndSmt(
+  run: NonNullable<ReturnType<typeof classRun>>,
+  term: string,
+): string {
+  const n = run.min
+  const item = run.star.alternatives[0]?.body
+  if (n === 0 || item?.kind !== 'repeat' || item.item.kind !== 'set')
+    return 'true'
+  const outside = setSmt(complement(item.item.set))
+  const rest = n === 1 ? '' : ` ((_ re.loop 0 ${n - 1}) re.allchar)`
+  const stray = run.fromStart
+    ? `(re.++${rest} ${outside} ${everything})`
+    : `(re.++ ${everything} ${outside}${rest})`
+  return `(and (str.in_re ${term} (re.++ ((_ re.loop ${n} ${n}) re.allchar) ${everything})) (not (str.in_re ${term} ${stray})))`
+}
+
 export function regexSmt(parsed: ParsedRegex): string {
   const anything = everything
   const parts = parsed.alternatives.map((a) => {

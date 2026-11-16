@@ -107,3 +107,52 @@ test('a file is found under the root, a line inside the function selects it, and
   assert.match(missing.out, /no such file: src\/nowhere\.ts/)
   assert.equal(missing.status, 2)
 })
+
+function diagnosedText(text: string): string {
+  const root = mkdtempSync(join(pilot, 'tooltest', '.scratch-'))
+  try {
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'src/steps.ts'), text)
+    writeFileSync(
+      join(root, 'tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: { strict: true, module: 'nodenext', noEmit: true },
+      }),
+    )
+    const done = spawnSync(
+      process.execPath,
+      [join(pilot, 'tools/diagnose.ts'), 'src/steps.ts', `--root=${root}`],
+      {
+        cwd: tmpdir(),
+        encoding: 'utf8',
+        env: { ...process.env, NODE_TEST_CONTEXT: undefined },
+      },
+    )
+    return `${done.stdout}${done.stderr}`
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+test('a yield is an exit, a loop and a generator fit no shape, and a function passed to a call is reported', () => {
+  const out = diagnosedText(`export function* problems(names: readonly string[]) {
+  for (const name of names) {
+    if (name.length === 0) yield 'empty'
+  }
+}
+
+declare const emitter: { on(event: string, handler: (code: number) => void): void }
+export const failures: number[] = []
+emitter.on('exit', (code) => {
+  if (code !== 0) failures.push(code)
+})
+`)
+  assert.match(out, /line 3 yield 'empty'/)
+  assert.match(
+    out,
+    /no shape: a loop goes over a collection, and no shape takes a loop; decide one item in a shape, and keep the loop in a file declared outside the claim \(line 2\)/,
+  )
+  assert.match(out, /no shape: the function is a generator, and no shape yields a sequence/)
+  assert.doesNotMatch(out, /name is not a const with one value/)
+  assert.match(out, /\(function passed to emitter\.on\)/)
+})

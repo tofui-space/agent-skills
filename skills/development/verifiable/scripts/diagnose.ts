@@ -29,9 +29,10 @@ export type SourceKind =
   | 'adapter call'
   | 'conversion call'
   | 'untraced variable'
+  | 'loop item'
 export type Exit = {
   readonly line: number
-  readonly kind: 'return' | 'throw' | 'may throw'
+  readonly kind: 'return' | 'throw' | 'may throw' | 'yield'
   readonly text: string
   readonly conditions: string[]
   readonly decidable: boolean
@@ -104,6 +105,16 @@ function nameOf(fn: ts.SignatureDeclaration): string | undefined {
   if (ts.isPropertyAssignment(parent) && ts.isIdentifier(parent.name))
     return parent.name.text
   return undefined
+}
+
+/** A name for a function that has none: the call it is passed to, such as `process.on`. */
+function labelOf(fn: ts.SignatureDeclaration, source: ts.SourceFile): string {
+  const named = nameOf(fn)
+  if (named) return named
+  const parent = fn.parent
+  return ts.isCallExpression(parent)
+    ? `(function passed to ${parent.expression.getText(source)})`
+    : '(anonymous)'
 }
 
 export function diagnose(
@@ -388,10 +399,16 @@ export function diagnose(
               ts.isVariableDeclarationList(variable.parent) &&
               Boolean(variable.parent.flags & ts.NodeFlags.Const) &&
               variable.initializer !== undefined
+            const loop = variable.parent.parent
             if (fixed && variable.initializer) visit(variable.initializer)
             else
               out.push({
-                kind: 'untraced variable',
+                kind:
+                  ts.isForOfStatement(loop) ||
+                  ts.isForInStatement(loop) ||
+                  ts.isForStatement(loop)
+                    ? 'loop item'
+                    : 'untraced variable',
                 text: node.text,
                 line: lineOf(node),
               })
@@ -986,6 +1003,8 @@ export function diagnose(
       }
       if (ts.isThrowStatement(node) && owner(node) === fn)
         addExit(node, 'throw', node.expression.getText(source))
+      if (ts.isYieldExpression(node) && owner(node) === fn)
+        addExit(node, 'yield', node.expression?.getText(source) ?? 'undefined')
       if (
         (ts.isCallExpression(node) || ts.isNewExpression(node)) &&
         !isAmbientRead(node)
@@ -1224,6 +1243,8 @@ export function diagnose(
     const regexMethods = new Set(['match', 'test', 'replace', 'search', 'exec'])
     const inputAdvice = (s: Source): string => {
       const type = s.type ?? ''
+      if (/\[\]$|^(readonly )?\[|^(Readonly)?(Array|Map|Set|Record)</.test(type))
+        return `no shape: ${s.text} (${type}) is a collection, and no shape takes one; pass one item, or the finite fact the code needs from the collection`
       if (/\bunknown\b|\bany\b/.test(type))
         return `type-test classifier: narrow ${s.text} (${type}) with typeof, === null, === undefined, Array.isArray and the Number.is* tests, returning a type predicate; reading its properties has no shape yet`
       if (/string/.test(type))
@@ -1234,6 +1255,12 @@ export function diagnose(
     }
     if (!stringCells)
       for (const b of adapterShape ? [] : branches) {
+        if (b.construct === 'loop') {
+          const key =
+            'no shape: a loop goes over a collection, and no shape takes a loop; decide one item in a shape, and keep the loop in a file declared outside the claim'
+          lines.set(key, (lines.get(key) ?? new Set()).add(b.line))
+          continue
+        }
         if (b.twoInputs)
           lines.set(
             `number classifier: ${b.text} compares two inputs; give each its own type and classify them together`,
@@ -1282,6 +1309,10 @@ export function diagnose(
       reshape.add(
         `no shape: line ${u.line} builds the text ${u.text} from a value, and no shape returns such a text; return the value as data beside a literal tag, and build the text in a file declared outside the claim`,
       )
+    if ('asteriskToken' in fn && fn.asteriskToken)
+      reshape.add(
+        'no shape: the function is a generator, and no shape yields a sequence; decide one item in a shape, and keep the generator in a file declared outside the claim',
+      )
     for (const o of outside.values())
       reshape.add(
         `dependency: ${o.text} is read from outside the function; pass it in`,
@@ -1291,7 +1322,7 @@ export function diagnose(
         `wiring: the effect at line ${e.line} runs inside the logic; return it as a planned effect and run it after the decision`,
       )
     return {
-      name: nameOf(fn) ?? '(anonymous)',
+      name: labelOf(fn, source),
       line: lineOf(fn),
       exits,
       branches,
@@ -1305,11 +1336,20 @@ export function diagnose(
   }
 
   const functions: ts.FunctionLikeDeclaration[] = []
-  const collect = (node: ts.Node): void => {
-    if (isNamed(node)) functions.push(node)
-    ts.forEachChild(node, collect)
+  // A function without a name is reported on its own only when no reported function holds it,
+  // such as a handler passed to process.on; inside a reported function it is part of that report.
+  const collect = (node: ts.Node, held: boolean): void => {
+    const unnamed =
+      (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+      !isNamed(node)
+    if (isNamed(node) || (unnamed && !held)) {
+      functions.push(node as ts.FunctionLikeDeclaration)
+      ts.forEachChild(node, (child) => collect(child, true))
+      return
+    }
+    ts.forEachChild(node, (child) => collect(child, held))
   }
-  collect(source)
+  collect(source, false)
   const lastLineOf = (node: ts.Node) =>
     source.getLineAndCharacterOfPosition(node.getEnd()).line + 1
   const around =

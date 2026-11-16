@@ -430,3 +430,50 @@ test('a point the requirement leaves open is printed for every spec that names o
   )
   assert.match(out, /1 points of the requirement are unsettled/)
 })
+
+test('a decision over a list is rejected once by name, also where an optional property is not undefined', () => {
+  const out = inventory({
+    'tsconfig.json': JSON.stringify({
+      compilerOptions: {
+        strict: true,
+        exactOptionalPropertyTypes: true,
+        module: 'nodenext',
+        target: 'esnext',
+        noEmit: true,
+      },
+    }),
+    'src/decisions/trial.ts': `export function firstTwice(params: readonly string[]): 'twice' | 'once' {
+  for (const [i, param] of params.entries())
+    if (params.indexOf(param) !== i) return 'twice'
+  return 'once'
+}
+`,
+  })
+  assert.match(
+    out,
+    /REJECTED src\/decisions\/trial\.ts:1 input params is a list, which no decision takes/,
+  )
+  assert.match(out, /loop in a pure shape/)
+  assert.doesNotMatch(out, /input (length|entries) is not a finite union/)
+})
+
+test('a text classifier on one class repeated a fixed number of times is counted', () => {
+  const out = inventory({
+    'tsconfig.json': strict,
+    'src/classifiers/hash.ts': `export function hashOf(hash: string): 'sha256' | 'other' {
+  if (/^[0-9a-f]{64}$/.test(hash)) return 'sha256'
+  return 'other'
+}
+`,
+    'spec/hashOf.spec.ts': `export const requirement =
+  'A SHA-256 hash is written as 64 characters, each a digit or a lowercase letter from a to f.'
+
+export function expected(hash: string): 'sha256' | 'other' {
+  if (hash.length !== 64) return 'other'
+  return /^[0-9a-f]*$/.test(hash) ? 'sha256' : 'other'
+}
+`,
+  })
+  assert.match(out, /classifier hashOf +\d+ cases/)
+  assert.doesNotMatch(out, /REJECTED/)
+})

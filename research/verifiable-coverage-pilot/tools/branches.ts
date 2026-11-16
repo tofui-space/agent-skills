@@ -393,6 +393,18 @@ function solverVersion(): string {
 
 const not = (smt: string) => `(not ${smt})`
 
+// The solver runs as WebAssembly, and when it runs out of memory it throws instead of answering.
+// A question it cannot answer is unknown, which blocks the claim for its unit and ends no run.
+async function verdict(solver: {
+  check(): Promise<'sat' | 'unsat' | 'unknown'>
+}): Promise<'sat' | 'unsat' | 'unknown'> {
+  try {
+    return await solver.check()
+  } catch {
+    return 'unknown'
+  }
+}
+
 export async function ask(
   cacheFile: string,
   query: string,
@@ -409,7 +421,7 @@ export async function ask(
   const solver = new Z3.Solver()
   solver.set('timeout', queryMilliseconds)
   solver.fromString(query)
-  const result = await solver.check()
+  const result = await verdict(solver)
   const answer: Answer = { result }
   if (result === 'unknown') return answer
   if (result === 'sat') {
@@ -469,7 +481,7 @@ export async function solveCells<W>(options: {
     const solver = new Z3.Solver()
     solver.set('timeout', queryMilliseconds)
     solver.fromString(query)
-    const result = await solver.check()
+    const result = await verdict(solver)
     const answer: Answer = { result }
     if (result === 'unknown') return answer
     if (result === 'sat') {
