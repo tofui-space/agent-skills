@@ -2708,6 +2708,12 @@ File.WriteAllBytes(args[1], bytes);
         self.assertIn("CURRENT", self.run_tool("check", extra=extra))
         self.assertIn("the project targets .NET 11, and the tool runs on .NET 10, which cannot run its code", self.run_tool("run", ok=False, extra=extra))
 
+    def test_an_obligations_file_in_another_layout_is_current(self):
+        # A formatter may rewrite the file's layout; the data in it is what the check compares.
+        self.run_tool("inventory")
+        self.out.write_text(json.dumps(json.loads(self.out.read_text(encoding="utf-8"))), encoding="utf-8")
+        self.assertIn("CURRENT obligations", self.run_tool("check"))
+
     def test_a_method_with_the_name_of_a_method_every_object_has_is_called_itself(self):
         self.source.write_text("public static class Rules { public static bool Equals(bool member) => member; public static bool ToString(bool member) => !member; }")
         rows = lambda flip: {"requirement": "A yes or no.", "parameters": ["member"], "unsettled": [],

@@ -208,7 +208,8 @@ internal static class Tool
             Console.WriteLine(json);
             return 0;
         }
-        Require(File.Exists(outPath) && File.ReadAllText(outPath).Trim() == json,
+        // The file is compared as data, so a formatter that changes only its layout does not make it stale.
+        Require(File.Exists(outPath) && SameData(File.ReadAllText(outPath), json),
             "STALE obligations: recompute inventory for this source, spec and compiler");
         if (args[0] == "check")
         {
@@ -495,6 +496,13 @@ internal static class Tool
     }
 
     private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    /// <summary>Whether two JSON texts hold the same data, whatever their layout; text that is no JSON holds none.</summary>
+    private static bool SameData(string stored, string computed)
+    {
+        try { return JsonNode.DeepEquals(JsonNode.Parse(stored), JsonNode.Parse(computed)); }
+        catch (JsonException) { return false; }
+    }
 
     internal static void Require([DoesNotReturnIf(false)] bool condition, string message)
     {

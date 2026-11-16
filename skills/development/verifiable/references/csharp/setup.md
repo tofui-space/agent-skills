@@ -18,6 +18,15 @@ dotnet build --nologo --artifacts-path <build>
 
 Build from that directory so `global.json` selects a stable 10.0 feature band. The project
 uses Roslyn assemblies shipped with the SDK and needs no third-party NuGet packages.
+
+For a file checked with `--project`, build the tool with the project's SDK instead: run the same
+build from the project's folder, naming the tool's project file
+(`dotnet build <skill>/scripts/dotnet/Verifiable.csproj --nologo --artifacts-path <build>`), so the
+project's `global.json` selects the SDK. The tool then compiles with that SDK's compiler and runs
+on its runtime, which is what lets it read a newer C# version and run code for a newer .NET.
+Built that way with the .NET 11 SDK, the tool ran on .NET 11 and read a project of C# 15 (2026-11-16).
+A tool built with an older SDK than the project's refuses the project's language version; that
+refusal is about the setup, not the code, so rebuild the tool and run again.
 Build writes intermediate files and binaries under `<build>`; neither belongs in the skill.
 The tool assembly is `<build>/bin/Verifiable/debug/Verifiable.dll`.
 Below `<tool>` denotes that assembly. Quote paths containing spaces.

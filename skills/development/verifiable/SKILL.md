@@ -43,6 +43,8 @@ Two words have a fixed meaning here:
   A design that only makes a property likely is not correct by construction.
 - **Dead end:** a piece of code the tool does not count after a reshape was tried, or for which the diagnosis gives only `no shape` steps, named with the tool's own rejection or `no shape` step.
   It has no count, and no hand-picked tests stand in for one.
+  A refusal that is about the setup and not the code is not a dead end: the tool's compiler or SDK, the project's options, or a file read standalone that needs its project (`using` directives in C#).
+  Fix the setup and run the tool again; if it cannot be fixed, report the check as blocked, with the refusal.
 
 The steps, with a checkpoint with the user at each **Stop**:
 
