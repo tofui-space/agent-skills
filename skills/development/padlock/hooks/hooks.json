@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/padlock.py", "hook"], "onFailure": "block"}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/padlock.py", "hook"], "onFailure": "block"}]}],
+    "UserPromptExpansion": [{"matcher": "^padlock:", "hooks": [{"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/padlock.py", "hook"], "onFailure": "block"}]}],
+    "PreToolUse": [{"matcher": "Bash|PowerShell|Skill", "hooks": [{"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/padlock.py", "hook"], "onFailure": "block"}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/padlock.py", "hook"]}]}],
+    "StopFailure": [{"hooks": [{"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/padlock.py", "hook"]}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/padlock.py", "hook"]}]}]
+  }
+}

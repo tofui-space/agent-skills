@@ -1,0 +1,5 @@
+{
+  "name": "padlock",
+  "version": "0.1.0",
+  "description": "Branch locks, anchors, session keys, and master keys with turn budgets for Git and GitButler."
+}

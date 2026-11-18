@@ -1,5 +1,11 @@
 # Workbench
 
+## Contents
+
+- [Stages](#stages)
+- [In flight](#in-flight)
+- [Keeping this current](#keeping-this-current)
+
 Skills that are started but not landed, and the decisions already made about them.
 
 Git already knows which skills exist and which are committed. What it cannot tell you is how far a
