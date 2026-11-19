@@ -14,7 +14,7 @@ Map the project's tokens to the page tokens:
 | `ink`, `text2`, `text3` | Body text, secondary text, muted text |
 | `rule` | Dividers and borders |
 | `accent` | Eyebrow, "Details" toggles, focus ring, the `decided` field name |
-| `done`, `doing`, `wait`, `open`, `note` | Status chips: done green, in progress blue, waiting red, open neutral, note muted purple |
+| `done`, `doing`, `wait`, `open`, `ready`, `note` | Status chips: done green, in progress blue, waiting red, blocked neutral (`open`), ready in the accent unless set, note muted purple |
 | `press`, `onPress` | Background and text of the selected filter button |
 
 Give both `light` and `dark` values. If the project has no dark theme, derive one from its light palette and tell the person the dark values were derived.

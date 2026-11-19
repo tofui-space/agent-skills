@@ -2,6 +2,7 @@
 // Builds a phone-first HTML task page from a Markdown tasks file.
 // Usage: node tasks-page.mjs [status [--label <name>]] <config.json> [--standalone]
 // "status" builds nothing: it prints the page link and the counts per status, in two lines.
+// An open item is "Ready" when every item in its depends:: line is done, and "Blocked" otherwise.
 // With --label, the counts cover only the items carrying that label.
 // The page is generated output: never edit it by hand, rerun this script instead.
 import { readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -46,6 +47,9 @@ const PALETTE = {
 const SYSTEM_SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 
 // [ ] open · [~] in progress · [x] done · [!] waiting on the reader
+// An open item becomes READY or BLOCKED once dependencies are resolved.
+const READY = { key: 'ready', word: 'Ready' }
+const BLOCKED = { key: 'blocked', word: 'Blocked' }
 const STATUS = {
   ' ': { key: 'open', word: 'Open' },
   '~': { key: 'doing', word: 'In progress' },
@@ -65,10 +69,12 @@ const FIELDS = {
   open: 'is a question for you',
 }
 
+// The ready chip follows the accent unless the config sets "ready".
 const palette = {
   light: { ...PALETTE.light, ...config.palette?.light },
   dark: { ...PALETTE.dark, ...config.palette?.dark },
 }
+for (const p of Object.values(palette)) p.ready ??= p.accent
 const fonts = {
   body: config.fonts?.body ?? { family: null },
   display: config.fonts?.display ?? config.fonts?.body ?? { family: null },
@@ -78,7 +84,7 @@ const rename = { ...(person ? { [`Waiting on ${person}`]: 'Waiting on you' } : {
 
 // ---------- parse ----------
 
-const FORMAT = 3
+const FORMAT = 4
 let title = config.title
 let format = null
 let bareIds = null
@@ -110,6 +116,8 @@ lines.forEach((line, n) => {
   const decl = !sections.length && line.match(/^Details:\s*(.+)$/)
   if (decl) {
     fields = new Map(decl[1].split('·').map((l) => l.trim()).filter(Boolean).map((l) => [l.toLowerCase(), l]))
+    if (fields.has('depends'))
+      fail(`${where}: "Depends" is reserved for dependencies since format 4; rename this detail field to Requires here and on every item, as the skill's "Format version" section describes`)
     return
   }
   if (!sections.length && /^Format:/.test(line)) {
@@ -170,12 +178,22 @@ lines.forEach((line, n) => {
     }
     const text = (id[3] ?? '').slice(tags.length)
     stray(text, where)
-    item = { id: id[1], status, labels: [...new Set(itemLabels)], text, details: [] }
+    item = { id: id[1], status, labels: [...new Set(itemLabels)], text, details: [], depends: [] }
     detail = null
     section.items.push(item)
     return
   }
   const d = line.match(/^ {2}- ([A-Za-z][\w ]*?)::\s+(.*)$/)
+  if (d && d[1].trim().toLowerCase() === 'depends') {
+    if (!item) fail(`${where}: a depends line needs an item above it`)
+    const refs = d[2].trim().split(/[\s,·]+/).filter(Boolean)
+    const bad = refs.find((r) => !new RegExp(`^${prefix}-[1-9]\\d*$`).test(r))
+    if (bad) fail(`${where}: "${bad}" is not an item ID; write "  - depends:: ${prefix}-1 · ${prefix}-2"`)
+    item.depends.push(...refs.filter((r) => !item.depends.includes(r)))
+    item.dependsAt ??= where
+    detail = null
+    return
+  }
   if (d) {
     if (!item) fail(`${where}: a detail field needs an item above it`)
     if (!fields) fail(`${where}: declare detail fields first, with a "Details: Decided · Shipped · …" line under the title`)
@@ -200,13 +218,36 @@ lines.forEach((line, n) => {
 if (!sections.length) checkFormat()
 title ??= 'Tasks'
 const all = sections.flatMap((s) => s.items)
+const byId = new Map(all.map((i) => [i.id, i]))
+for (const i of all) {
+  for (const r of i.depends) {
+    const target = byId.get(r)
+    if (!target) fail(`${i.dependsAt}: ${i.id} depends on ${r}, which is not in the file; remove it from the depends line`)
+    if (target === i) fail(`${i.dependsAt}: ${i.id} depends on itself; remove it from the depends line`)
+    if (target.status === NOTE) fail(`${i.dependsAt}: ${r} is a note and is never done; depend on an item with a status box`)
+  }
+}
+// A cycle would keep every item in it blocked for good.
+const visiting = new Set()
+const visited = new Set()
+const walk = (i, path) => {
+  if (visited.has(i.id)) return
+  if (visiting.has(i.id)) fail(`${i.dependsAt}: dependency cycle ${[...path.slice(path.indexOf(i.id)), i.id].join(' → ')}; remove one of these dependencies`)
+  visiting.add(i.id)
+  for (const r of i.depends) walk(byId.get(r), [...path, i.id])
+  visiting.delete(i.id)
+  visited.add(i.id)
+}
+for (const i of all) walk(i, [])
+const isDone = (i) => i.status.key === 'done'
+for (const i of all) if (i.status.key === 'open') i.status = i.depends.every((r) => isDone(byId.get(r))) ? READY : BLOCKED
 const count = (key, items = all) => items.filter((i) => i.status.key === key).length
 
 if (statusOnly) {
   if (onlyLabel && !labels?.includes(onlyLabel)) fail(`"${onlyLabel}" is not a declared label (${labels?.join(', ') || 'the file has no Labels line'})`)
   const scope = onlyLabel ? all.filter((i) => i.labels.includes(onlyLabel)) : all
   console.log(`${link ?? `${out} (not published)`}
-${onlyLabel ? `#${onlyLabel}: ` : ''}${count('wait', scope)} waiting on you · ${count('doing', scope)} in progress · ${count('open', scope)} open · ${count('done', scope)} done`)
+${onlyLabel ? `#${onlyLabel}: ` : ''}${count('wait', scope)} waiting on you · ${count('doing', scope)} in progress · ${count('ready', scope)} ready · ${count('blocked', scope)} blocked · ${count('done', scope)} done`)
   process.exit(0)
 }
 
@@ -267,8 +308,8 @@ for (const theme of ['light', 'dark']) {
     const r = ratio(f, bg)
     if (r < 4.5) problems.push(`${theme}: ${name} on ${bgName} is ${r.toFixed(2)}:1, needs 4.5:1`)
   }
-  for (const t of ['ink', 'text2', 'text3', 'accent', 'done', 'doing', 'wait', 'open', 'note']) check(t, t)
-  for (const [t, share] of [['done', 0.1], ['doing', 0.1], ['wait', 0.12]]) {
+  for (const t of ['ink', 'text2', 'text3', 'accent', 'done', 'doing', 'wait', 'open', 'ready', 'note']) check(t, t)
+  for (const [t, share] of [['done', 0.1], ['doing', 0.1], ['wait', 0.12], ['ready', 0.1]]) {
     const f = parse(p[t])
     if (f && ground) check(`${t} chip text`, t, mix(f, ground, share), 'its chip fill')
   }
@@ -278,7 +319,7 @@ if (problems.length) fail(`contrast below WCAG AA, page not written:\n  ${proble
 
 // ---------- render ----------
 
-const todo = count('open') + count('doing') + count('wait')
+const todo = count('ready') + count('blocked') + count('doing') + count('wait')
 const hasDetails = all.some((i) => i.details.length)
 const fieldsUsed = [...new Set(all.flatMap((i) => i.details.map((d) => d.field.toLowerCase())))]
 const labelsUsed = (labels ?? []).filter((l) => all.some((i) => i.labels.includes(l)))
@@ -297,6 +338,33 @@ const uniqueId = (s) => {
   for (let n = 2; ids.has(id); n++) id = `s-${slug(s)}-${n}`
   ids.add(id)
   return id
+}
+
+// The bold title, or the start of the text when the item has none.
+const shortTitle = (i) => {
+  const bold = i.text.match(/\*\*(.+?)\*\*/)
+  const t = (bold ? bold[1] : i.text).trim()
+  return t.length > 70 ? `${t.slice(0, 69).trimEnd()}…` : t
+}
+// Not-done dependencies first, done ones after; file order within each group.
+const dependsHtml = (i) => {
+  if (!i.depends.length) return ''
+  const deps = i.depends.map((r) => byId.get(r))
+  const sorted = [...deps.filter((d) => !isDone(d)), ...deps.filter(isDone)]
+  const done = deps.filter(isDone).length
+  const rows = sorted
+    .map(
+      (d) =>
+        `<li><a class="dep${isDone(d) ? ' is-done' : ''}" href="#${d.id}" data-dep="${d.id}"><span class="id">${d.id}</span> ${inline(shortTitle(d))}</a> <span class="dep-status">${d.status.word}</span></li>`,
+    )
+    .join('\n            ')
+  return `
+        <details class="deps">
+          <summary>Depends on <span class="kinds">${done} of ${deps.length} done</span></summary>
+          <ul>
+            ${rows}
+          </ul>
+        </details>`
 }
 
 const detailsHtml = (i) => {
@@ -327,7 +395,7 @@ ${s.items
     (i) => `    <li id="${i.id}" data-status="${i.status.key}" data-labels="${i.labels.join(' ')}">
       <span class="chip ${i.status.key}">${i.status.word}</span>
       <div class="body">
-        <p><a class="id" href="#${i.id}">${i.id}</a>${i.labels.map((l) => ` <span class="tag">#${l}</span>`).join('')} ${inline(i.text)}</p>${detailsHtml(i)}
+        <p><a class="id" href="#${i.id}">${i.id}</a>${i.labels.map((l) => ` <span class="tag">#${l}</span>`).join('')} ${inline(i.text)}</p>${dependsHtml(i)}${detailsHtml(i)}
       </div>
     </li>`,
   )
@@ -413,7 +481,8 @@ strong { font-weight: 600; }
 .chip.done { color: var(--done); background: color-mix(in srgb, var(--done) 10%, transparent); }
 .chip.doing { color: var(--doing); background: color-mix(in srgb, var(--doing) 10%, transparent); }
 .chip.wait { color: var(--wait); background: color-mix(in srgb, var(--wait) 12%, transparent); }
-.chip.open { color: var(--open); }
+.chip.ready { color: var(--ready); background: color-mix(in srgb, var(--ready) 10%, transparent); }
+.chip.blocked { color: var(--open); }
 .chip.note { color: var(--note); }
 details { border-left: 2px solid var(--rule); padding-left: 12px; }
 summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 15px; color: var(--accent); list-style: none; }
@@ -422,6 +491,13 @@ summary::before { content: '▸'; display: inline-block; width: 1em; transition:
 details[open] > summary::before { transform: rotate(90deg); }
 summary .kinds { font-weight: 400; font-size: 13px; color: var(--text3); }
 dl { margin: 0 0 6px; display: grid; gap: 10px; }
+.deps ul { margin: 0 0 6px; display: grid; gap: 2px; }
+.deps li { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; min-height: 44px; padding: 0; border: 0; }
+.dep { padding-block: 10px; color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.dep:hover { text-decoration-color: currentColor; }
+.dep .id { color: inherit; }
+.dep.is-done, .dep.is-done + .dep-status { color: var(--text3); }
+.dep-status { font-size: 13px; color: var(--text2); white-space: nowrap; }
 dl div { display: grid; gap: 2px; }
 dt.field { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3); }
 dt.decided, .legend .k-decided { color: var(--accent); }
@@ -438,10 +514,11 @@ footer { margin-top: 40px; color: var(--text3); font-size: 14px; }
   <header>
     <button type="button" class="theme" id="theme" data-dark="false" aria-label="Switch to dark theme" title="Switch to dark theme"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>${config.eyebrow ? `\n    <p class="eyebrow">${escape(config.eyebrow)}</p>` : ''}
     <h1>${escape(title)}</h1>
-    <p class="summary">${[waiting ? `<strong>${waiting} waiting on you</strong>` : '0 waiting on you', `${count('doing')} in progress`, `${count('open')} open`, `${count('done')} done`].map((t) => `<span>${t}</span>`).join(' · ')}</p>${pickHtml}
+    <p class="summary">${[waiting ? `<strong>${waiting} waiting on you</strong>` : '0 waiting on you', `${count('doing')} in progress`, `${count('ready')} ready`, `${count('blocked')} blocked`, `${count('done')} done`].map((t) => `<span>${t}</span>`).join(' · ')}</p>${pickHtml}
   </header>
   <nav class="bar" aria-label="Show">
     <button type="button" data-filter="todo" aria-pressed="false">To do <span class="n" data-n="todo">${todo}</span></button>
+    <button type="button" data-filter="ready" aria-pressed="false">Ready <span class="n" data-n="ready">${count('ready')}</span></button>
     <button type="button" data-filter="wait" aria-pressed="false">Waiting on you <span class="n" data-n="wait">${waiting}</span></button>
     <button type="button" data-filter="done" aria-pressed="false">Done <span class="n" data-n="done">${count('done')}</span></button>
     <button type="button" data-filter="all" aria-pressed="true">All</button>${hasDetails ? '\n    <button type="button" id="all-details" aria-pressed="false">All details</button>' : ''}
@@ -455,7 +532,8 @@ ${sectionHtml}
   const key = ${JSON.stringify(storageKey)}
   const show = {
     all: () => true,
-    todo: (s) => s === 'open' || s === 'doing' || s === 'wait',
+    todo: (s) => s === 'ready' || s === 'blocked' || s === 'doing' || s === 'wait',
+    ready: (s) => s === 'ready',
     wait: (s) => s === 'wait',
     done: (s) => s === 'done',
   }
@@ -472,7 +550,7 @@ ${sectionHtml}
     let any = 0
     for (const section of document.querySelectorAll('[data-section]')) {
       let shown = 0
-      for (const li of section.querySelectorAll('li')) {
+      for (const li of section.querySelectorAll('li[data-status]')) {
         li.hidden = !labelled(li) || !show[state.filter](li.dataset.status)
         if (!li.hidden) shown++
       }
@@ -481,7 +559,7 @@ ${sectionHtml}
       any += shown
     }
     document.querySelector('.empty').hidden = any > 0
-    const items = [...document.querySelectorAll('li')].filter(labelled)
+    const items = [...document.querySelectorAll('li[data-status]')].filter(labelled)
     for (const n of document.querySelectorAll('[data-n]')) n.textContent = String(items.filter((li) => show[n.dataset.n](li.dataset.status)).length)
     if (picker) picker.value = state.label
     try { localStorage.setItem(key, state.filter); localStorage.setItem(labelKey, state.label) } catch {}
@@ -527,7 +605,7 @@ ${sectionHtml}
   new ResizeObserver(pad).observe(bar)
   const reveal = () => {
     const target = location.hash && document.getElementById(location.hash.slice(1))
-    if (!target || !target.matches('li') || !target.hidden) return
+    if (!target || !target.matches('li[data-status]') || !target.hidden) return
     state.filter = 'all'
     state.label = '*'
     apply()
@@ -535,6 +613,22 @@ ${sectionHtml}
   }
   reveal()
   addEventListener('hashchange', reveal)
+  // A dependency link switches to the tab that holds its target when the current tab or label hides it.
+  const tabFor = { done: 'done', wait: 'wait', ready: 'ready', blocked: 'todo', doing: 'todo' }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[data-dep]')
+    if (!a) return
+    const target = document.getElementById(a.dataset.dep)
+    if (!target) return
+    e.preventDefault()
+    if (target.hidden) {
+      if (!show[state.filter](target.dataset.status)) state.filter = tabFor[target.dataset.status] ?? 'all'
+      if (!labelled(target)) state.label = '*'
+      apply()
+    }
+    if (location.hash === '#' + target.id) target.scrollIntoView()
+    else location.hash = target.id
+  })
 })()
 </script>
 `

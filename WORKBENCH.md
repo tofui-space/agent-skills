@@ -376,7 +376,7 @@ Sets the language for everything written to English in its international variety
 
 ### living-tasks
 
-`development` · stable item IDs added 2026-10-15
+`development` · stable item IDs added 2026-10-15 · dependencies and Ready status added 2026-11-19
 
 **Decided** — do not reopen:
 
@@ -409,6 +409,17 @@ Sets the language for everything written to English in its international variety
 **Agent test (2026-11-03): 6 of 6 runs passed.** Fresh subagents, each told to read the skill from a copy, in scratch git repos, two runs per case. Prefix question on a new list: both asked with a default checked by `git grep` and wrote no item or code (one wrote the header and config first, which the skill allows). Request in a labelled file: both wrote the item with `#bug` after the ID and raised `next` before writing code, invented no label, asked nothing about labels, and marked it done only with test evidence. Label count: both ran `status --label bug` and replied with its two lines. Not covered: triggering from the description, behavior after the person answers the prefix question, and an item no declared label fits.
 
 **Tasks files carry a format version, and older files are migrated before any edit (author's requirement, 2026-11-03).** The ID and label changes had made every tasks file written by an earlier copy fail to build. Now a `Format: 3` header line marks the version; a file without it is format 1 (no `IDs:` line) or 2 (has one). The skill lists the migration steps per version, and the generator stops on an older file with a message naming its format, so an unmigrated file never builds. Any future change to the file format must raise the number and add its migration step. Tested on 2026-11-03 against scratch copies of seven real tasks files: six format 1 and one format 2 with an `IDs:` line without a counter. All seven were stopped before migration and built after the steps were applied by script. No agent run of the migration yet.
+
+**Dependencies and the Ready status (format 4, 2026-11-19).** User request: a dependency list in a disclosure before "Details", links that scroll to the target and change the filter tab, done dependencies gray and sorted after the others, and a new "ready" status for to-do items not blocked by other items.
+
+- Dependencies are a reserved `  - depends:: CRB-1 · CRB-9` line under the item, not a declared detail field. Format raised to 4 because a format-3 generator stops on it; migration 3 → 4 only renames a user field already called `Depends`.
+- Ready is computed, not a status box: an open item with every dependency done is "Ready", otherwise "Blocked". The "Open" chip is gone; summary and `status` print `ready` and `blocked` instead of `open`. Chosen so marking a dependency done needs no edit to the items waiting on it, and so the counts stay disjoint.
+- A dependency link that the filter hides switches to the tab holding the target's status (blocked and in progress → To do), not to All. The older rule for direct `#ID` links (switch to All) is unchanged.
+- The generator stops on an unknown ID, self-dependency, dependency on a note, and cycles.
+- **Skill version `metadata.version: "4.0.0"` (author's requirement, 2026-11-19).** The major number equals the tasks-file format the skill writes, so a major bump signals that sessions inheriting the new copy must migrate existing files.
+- **Migration 3 → 4 tested 2026-11-19** against the format-3 claude.ai copy: its example file and page built with the old generator; the new generator, `status` and the rebuild hook all stopped naming format 3; after changing the `Format:` line the file built, and the old generator then stopped with "update the skill". A file declaring its own `Depends` field stops with a rename message; after the rename it builds. A format-1 file built after steps 1–3. Rollout order: a session still on the format-3 copy refuses a migrated file, so upload to claude.ai before or with the first migration.
+- **Review of the dependencies change (skill-final-review, 2026-11-19): all 5 findings applied.** B1: the format 3 → 4 step renames a user `Depends` field to `Requires` (or `Depends note`) without asking, so it never competes with "add the item in the same turn". B2: "which task to start next" lists Ready items after unfinished `[~]` items; `[!]` items are the person's to do. B3: the trigger is "task X depends on task Y" / "X is blocked by Y", not "X depends on Y", so package-dependency talk does not fire it. N1: step 3 → 4 points to "Dependencies" instead of restating the reserved rule. N2: steps 1 → 2 and 2 → 3 moved to `references/migration.md`; body 3010 → 2954 words, description 681 → 712 characters.
+- Checked 2026-11-19 in headless Chromium at 360 px light and dark and 1280 px: no sideways scroll, order not-done then done, done link in `text3` gray, link to a done target from To do switched to Done and set the hash. No agent run and no skill-final-review of this change yet.
 
 **Left:** land. Then upload the skill to claude.ai again; the synced copy is the version without IDs. The synced copy also has scripts this repo does not (`pull-to-tasks.mjs`, `privacy-scan.mjs`, `references/sources.md`); decide whether they come back before uploading over it.
 

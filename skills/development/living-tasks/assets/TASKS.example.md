@@ -1,7 +1,7 @@
 # Crumb tasks
 
 Living task list for Crumb, the bakery pre-order app. Local only, never committed.
-Format: 3
+Format: 4
 Status: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` waiting on Alex.
 Details: Decided · Shipped · Spec · Evidence · Direction · Open
 Labels: storefront · orders · bug
@@ -20,12 +20,14 @@ Page: https://example.com/pages/crumb-tasks
   - spec:: the 14 EU allergens, shown as words, never as icons alone.
   - direction:: a "Contains" line under the price; a product with no entry says "Allergens not listed yet".
 - [ ] CRB-7 #orders **Order history** on the account screen (Alex asked 2026-03-03).
+  - depends:: CRB-1 · CRB-9
   - open:: keep orders for 12 months or for good?
 - [ ] CRB-9 #orders #bug **Receipt times** show the pickup time in UTC.
 
 ## Queue (approved)
 
 - [ ] CRB-2 **Gift cards.**
+  - depends:: CRB-1
   - decided:: approved 2026-03-01.
 - [ ] CRB-3 #storefront **Weekly specials banner.**
 

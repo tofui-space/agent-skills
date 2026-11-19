@@ -1,6 +1,8 @@
 ---
 name: living-tasks
-description: Keep a project's task list in a local TASKS.md and publish it as a phone-first HTML page with status and label filters and expandable details. Use when work spans sessions or requests and the person needs to see what is open, done, or waiting on them; on "task list", "TASKS.md", "track this", "add it to the list", "what's left", "what's waiting on me", "publish the tasks", "rebuild the task page", "link to the task page", "label these tasks", "filter the tasks by label"; and when a request arrives mid-session. Not for building a to-do feature in an app, and not for the session's own progress checklist.
+metadata:
+  version: "4.0.0"
+description: Keep a project's task list in a local TASKS.md and publish it as a phone-first HTML page with status and label filters, task dependencies, and expandable details. Use when work spans sessions or requests and the person needs to see what is open, done, or waiting on them; on "task list", "TASKS.md", "track this", "add it to the list", "what's left", "what's waiting on me", "publish the tasks", "rebuild the task page", "link to the task page", "label these tasks", "filter the tasks by label", "task X depends on task Y", "X is blocked by Y", "what's ready", "what's blocked"; and when a request arrives mid-session. Not for building a to-do feature in an app, and not for the session's own progress checklist.
 ---
 
 # Living tasks
@@ -21,6 +23,7 @@ An agent's memory is lost on a new session or after compaction. A file on disk i
   - Sections
   - Labels
   - Items
+  - Dependencies
   - Detail fields
   - Done items carry evidence
   - Waiting items name the exact action
@@ -50,7 +53,7 @@ Under the title:
 # Crumb tasks
 
 Living task list for Crumb, the bakery pre-order app. Local only, never committed.
-Format: 3
+Format: 4
 Status: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` waiting on Alex.
 Details: Decided · Shipped · Spec · Evidence · Direction · Open
 Labels: storefront · orders · bug
@@ -66,17 +69,17 @@ Page: https://example.com/pages/crumb-tasks
 
 ### Format version
 
-This skill writes format 3. A new tasks file gets the `Format: 3` line.
+This skill writes format 4. A new tasks file gets the `Format: 4` line. The skill's `metadata.version` major number equals the format it writes, so a major bump means existing tasks files need a migration step.
 
-Before the first edit to a tasks file in a session, read its header. A file with no `Format:` line is format 1 if it has no `IDs:` line, and format 2 if it has one. Migrate an older file before any other edit to it:
+Before the first edit to a tasks file in a session, read its header. Also migrate when a build, the rebuild hook, or `status` reports an older format. A file with no `Format:` line is format 1 if it has no `IDs:` line, and format 2 if it has one. Migrate an older file before any other edit to it:
 
-1. **Format 1 to 2, item IDs.** Ask the person for the prefix as "Item IDs" describes, and wait for the answer. Then number the existing items 1, 2, 3, … in file order, notes included, and add the `IDs:` line with `next` one above the last.
-2. **Format 2 to 3, labels.** If the `IDs:` line has no `next`, such as `IDs: CA`, add it: `IDs: CA · next CA-<n>`, with `<n>` one above the highest item number in the file. An item whose text starts with `#` right after its ID would now be read as a label: backtick that word. Then add `Format: 3` under the description line.
+1. **Format 1 or 2:** first follow the steps in `references/migration.md`, which bring the file to format 3.
+2. **Format 3 to 4, dependencies.** `depends::` is reserved (see "Dependencies"). If the `Details:` line declares `Depends`, rename that field to `Requires` in the `Details:` line and on every item, without asking; if `Requires` is already declared, use `Depends note`. Then change the line to `Format: 4`.
 3. Rebuild and republish the page.
 
-Change nothing else in the file while migrating, and tell the person in one line which format it was migrated from. The generator stops on a file older than format 3 and names its format, so an unmigrated file never builds a page.
+Change nothing else in the file while migrating, and tell the person in one line which format it was migrated from, naming any renamed field. The generator stops on a file older than format 4 and names its format, so an unmigrated file never builds a page.
 
-A file with a format higher than 3 was written by a newer version of this skill. Do not edit it; tell the person to update the skill.
+A file with a format higher than 4 was written by a newer version of this skill. Do not edit it; tell the person to update the skill.
 
 ### Item IDs
 
@@ -141,7 +144,7 @@ One item is one line starting `- `, continued on lines indented 2 spaces.
 
 Status box, then ID, then labels if any, then text:
 
-- `[ ]` open
+- `[ ]` open; the page shows it as "Ready" or "Blocked", see "Dependencies"
 - `[~]` in progress
 - `[x]` done
 - `[!]` waiting on the person
@@ -152,6 +155,23 @@ Rules for every item:
 - **Bold title after the ID and any labels.** The title names the outcome in the person's words: "**Pickup slots fill up correctly.**", not "Slot logic".
 - **Quote the person, with a date.** Where the person asked for or decided something, quote their exact words and the date: `Alex 2026-03-02: "close it at twelve."` Their wording is the requirement; a paraphrase drifts.
 - **One item per request.** A request that grows becomes more detail fields, not a second item.
+
+### Dependencies
+
+An item that cannot start before other items are done lists them on a `depends::` line:
+
+```markdown
+- [ ] CRB-7 #orders **Order history** on the account screen.
+  - depends:: CRB-1 · CRB-9
+```
+
+- The line sits under the item like a detail field, indented 2 spaces. It holds item IDs separated by ` · `, commas, or spaces. It is reserved: it is not declared in the `Details:` line and does not count as a detail field.
+- Add a dependency when the person names one, or when the item's work needs another item's result, such as a screen that reads data another item adds. Do not add one only because two items touch the same area.
+- **Ready and Blocked are computed, never written.** An open `[ ]` item is "Ready" when every item on its `depends::` line is `[x]`, and "Blocked" otherwise. An open item with no `depends::` line is Ready. In progress, waiting, and done items keep their status whatever their dependencies are. Marking a dependency `[x]` makes the waiting item Ready at the next build, with no edit to that item.
+- When the person asks which task to start next, list Ready items, after any `[~]` item still unfinished. `[!]` items are the person's own to do, not tasks to start.
+- When an item is removed, remove its ID from every `depends::` line in the same edit.
+
+The generator stops on an ID that is not in the file, an item that depends on itself, a dependency on a note, and a dependency cycle, and names the line.
 
 ### Detail fields
 
@@ -229,7 +249,7 @@ It prints two lines and writes nothing:
 
 ```
 https://example.com/pages/crumb-tasks
-2 waiting on you · 1 in progress · 5 open · 1 done
+2 waiting on you · 1 in progress · 4 ready · 1 blocked · 1 done
 ```
 
 Reply with those two lines. When the question names a label, such as "how many bugs are open?", add `--label bug` after `status`: the second line then counts only the items carrying that label, and starts with `#bug:`. Read the tasks file only when the person asks about specific tasks. The first line is the `Page:` link, or the local page path followed by "(not published)" when the file has no link yet. The command checks the tasks file as a build does, and stops on the same errors.
@@ -255,7 +275,8 @@ Read `references/page.md` before changing the script, the config, or the palette
 
 - `scripts/tasks-page.mjs` — the generator, and its `status` subcommand. Node 18 or later, no dependencies.
 - `references/page.md` — page behavior checklist and config reference.
+- `references/migration.md` — the steps that bring a format 1 or 2 tasks file to format 3.
 - `references/setup.md` — taking the palette and fonts from the project, and installing the optional rebuild hook.
-- `assets/TASKS.example.md` — a complete tasks file with every section, status, detail field, and labels.
+- `assets/TASKS.example.md` — a complete tasks file with every section, status, detail field, labels, and dependencies.
 - `assets/tasks-page.config.example.json` — a config that builds the example.
 - `assets/hooks/rebuild-on-edit.mjs`, `assets/hooks/settings.example.json` — the optional Claude Code rebuild hook.
