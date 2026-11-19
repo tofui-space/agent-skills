@@ -1,7 +1,7 @@
 ---
 name: living-tasks
 metadata:
-  version: "4.1.0"
+  version: "4.2.0"
 description: Keep a project's task list in a local TASKS.md and publish it as a phone-first HTML page with status and label filters, task dependencies, and expandable details. Use when work spans sessions or requests and the person needs to see what is open, done, or waiting on them; on "task list", "TASKS.md", "track this", "add it to the list", "what's left", "what's waiting on me", "publish the tasks", "rebuild the task page", "link to the task page", "label these tasks", "filter the tasks by label", "task X depends on task Y", "X is blocked by Y", "what's ready", "what's blocked"; and when a request arrives mid-session. Not for building a to-do feature in an app, and not for the session's own progress checklist.
 ---
 
@@ -77,12 +77,12 @@ Before the first edit to a tasks file in a session, read its header. Also migrat
 2. **Format 3 to 4, dependencies.** `depends::` is reserved (see "Dependencies"). If the `Details:` line declares `Depends`, rename that field to `Requires` in the `Details:` line and on every item, without asking; if `Requires` is already declared, use `Depends note`. Then change the line to `Format: 4`.
 3. **Offer what the new format adds.** Tell the person in one line which format the file was migrated from, naming any renamed field. Then, for each feature the file gained and does not use yet, ask one multiple-choice question, with the environment's question tool if it has one, and wait for the answer:
    - **Labels**, when the file was format 1 or 2 and has no `Labels:` line: "Propose labels from the items" · "I'll name the labels" · "Not now".
-   - **Dependencies**, when no item has a `depends::` line: "Propose dependencies from the items" · "Not now".
+   - **Dependencies**, when no item has a `depends::` line: "Add dependencies for me" · "Not now".
 
-   A label proposal lists each label, taken from a subject several items share (an area, a feature, a kind of task), with the IDs of the items it would go on. A dependency proposal lists each `depends::` line with the result the item needs, by the rule in "Dependencies". The person picks which to keep, and only those are written. On "I'll name the labels", declare the names given and label items by the rule in "Labels". On "Not now", write nothing more. These questions are asked once, during the migration, and not again.
+   A label proposal lists each label, taken from a subject several items share (an area, a feature, a kind of task), with the IDs of the items it would go on. The person picks which labels to keep, and only those are written. On "Add dependencies for me", add a `depends::` line only where the rule in "Dependencies" clearly applies, leave an item without one when in doubt, and report in one line how many were added; the person reviews them on the page and asks for any change. On "I'll name the labels", declare the names given and label items by the rule in "Labels". On "Not now", write nothing more. These questions are asked once, during the migration, and not again.
 4. Rebuild and republish the page.
 
-Change nothing else in the file while migrating; step 3 writes only what the person picks. The generator stops on a file older than format 4 and names its format, so an unmigrated file never builds a page.
+Change nothing else in the file while migrating; step 3 writes only what the person's answers allow. The generator stops on a file older than format 4 and names its format, so an unmigrated file never builds a page.
 
 A file with a format higher than 4 was written by a newer version of this skill. Do not edit it; tell the person to update the skill.
 

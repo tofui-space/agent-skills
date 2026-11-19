@@ -329,8 +329,25 @@ const timeZone = config.timeZone ?? Intl.DateTimeFormat().resolvedOptions().time
 const updated = statSync(source).mtime.toLocaleString(config.locale ?? 'en-GB', {
   day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone,
 })
+// Sort keys, written on each item as data attributes. "unblocks" counts the not-done items that depend on the item, directly or through other items.
+const dependents = new Map(all.map((i) => [i.id, []]))
+for (const i of all) for (const r of i.depends) dependents.get(r).push(i)
+const unblocks = (i) => {
+  const seen = new Set()
+  const stack = [...dependents.get(i.id)]
+  while (stack.length) {
+    const d = stack.pop()
+    if (seen.has(d)) continue
+    seen.add(d)
+    stack.push(...dependents.get(d.id))
+  }
+  return [...seen].filter((d) => !isDone(d) && d.status !== NOTE).length
+}
+const RANK = { doing: 0, ready: 1, blocked: 2, wait: 3, done: 4, note: 5 }
+const sortData = new Map(all.map((i, n) => [i, `data-order="${n}" data-num="${i.id.split('-').pop()}" data-rank="${RANK[i.status.key]}" data-unblocks="${unblocks(i)}"`]))
 const storageKey = `tasks-filter:${slug(title)}`
 const labelKey = `tasks-label:${slug(title)}`
+const sortKey = `tasks-sort:${slug(title)}`
 const themeKey = `tasks-theme:${slug(title)}`
 const ids = new Set()
 const uniqueId = (s) => {
@@ -392,7 +409,7 @@ const sectionHtml = sections
   <ul>
 ${s.items
   .map(
-    (i) => `    <li id="${i.id}" data-status="${i.status.key}" data-labels="${i.labels.join(' ')}">
+    (i) => `    <li id="${i.id}" data-status="${i.status.key}" data-labels="${i.labels.join(' ')}" ${sortData.get(i)}>
       <span class="chip ${i.status.key}">${i.status.word}</span>
       <div class="body">
         <p><a class="id" href="#${i.id}">${i.id}</a>${i.labels.map((l) => ` <span class="tag">#${l}</span>`).join('')} ${inline(i.text)}</p>${dependsHtml(i)}${detailsHtml(i)}
@@ -408,6 +425,7 @@ ${s.items
 const pickHtml = labelsUsed.length
   ? `\n    <div class="pick"><label for="label">Label</label><select id="label"><option value="*">All labels</option>${labelsUsed.map((l) => `<option value="${l}">#${l}</option>`).join('')}${unlabeled ? '<option value="-">No label</option>' : ''}</select></div>`
   : ''
+const sortHtml = `\n    <div class="pick"><label for="sort">Sort</label><select id="sort"><option value="file">File order</option><option value="rec">Recommended</option><option value="deps">Most depended on</option><option value="id">ID number</option></select></div>`
 
 const legend = fieldsUsed
   .filter((f) => FIELDS[f])
@@ -447,8 +465,9 @@ h2 { font-size: 26px; line-height: 1.2; }
 .summary span { white-space: nowrap; }
 header { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: start; }
 header > :not(.theme) { grid-column: 1; }
-header > .summary, header > .pick { grid-column: 1 / -1; }
-.pick { margin-top: 12px; display: grid; gap: 4px; justify-items: start; min-width: 0; }
+header > .summary, header > .picks { grid-column: 1 / -1; }
+.picks { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 12px; min-width: 0; }
+.pick { flex: none; max-width: 100%; display: grid; gap: 4px; justify-items: start; min-width: 0; }
 .pick label { font-size: 14px; font-weight: 600; color: var(--text2); }
 .pick select { min-height: 44px; min-width: min(100%, 12rem); max-width: 100%; padding-inline: 12px; border: 1px solid var(--text3); border-radius: 8px; background: color-mix(in srgb, var(--ink) 4%, var(--ground)); color: var(--ink); font: 16px/1.2 ${bodyFont}; text-overflow: ellipsis; cursor: pointer; }
 .theme { grid-column: 2; grid-row: 1 / span ${config.eyebrow ? 2 : 1}; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--text2); cursor: pointer; }
@@ -514,7 +533,9 @@ footer { margin-top: 40px; color: var(--text3); font-size: 14px; }
   <header>
     <button type="button" class="theme" id="theme" data-dark="false" aria-label="Switch to dark theme" title="Switch to dark theme"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>${config.eyebrow ? `\n    <p class="eyebrow">${escape(config.eyebrow)}</p>` : ''}
     <h1>${escape(title)}</h1>
-    <p class="summary">${[waiting ? `<strong>${waiting} waiting on you</strong>` : '0 waiting on you', `${count('doing')} in progress`, `${count('ready')} ready`, `${count('blocked')} blocked`, `${count('done')} done`].map((t) => `<span>${t}</span>`).join(' · ')}</p>${pickHtml}
+    <p class="summary">${[waiting ? `<strong>${waiting} waiting on you</strong>` : '0 waiting on you', `${count('doing')} in progress`, `${count('ready')} ready`, `${count('blocked')} blocked`, `${count('done')} done`].map((t) => `<span>${t}</span>`).join(' · ')}</p>
+    <div class="picks">${pickHtml}${sortHtml}
+    </div>
   </header>
   <nav class="bar" aria-label="Show">
     <button type="button" data-filter="todo" aria-pressed="false">To do <span class="n" data-n="todo">${todo}</span></button>
@@ -539,7 +560,17 @@ ${sectionHtml}
   }
   const labelKey = ${JSON.stringify(labelKey)}
   const picker = document.getElementById('label')
-  const state = { filter: 'all', label: '*' }
+  const sortKey = ${JSON.stringify(sortKey)}
+  const sorter = document.getElementById('sort')
+  const num = (li, k) => Number(li.dataset[k])
+  // Sorting reorders items inside each section; sections keep their order.
+  const orders = {
+    file: (a, b) => num(a, 'order') - num(b, 'order'),
+    rec: (a, b) => num(a, 'rank') - num(b, 'rank') || num(b, 'unblocks') - num(a, 'unblocks') || num(a, 'num') - num(b, 'num'),
+    deps: (a, b) => num(b, 'unblocks') - num(a, 'unblocks') || num(a, 'num') - num(b, 'num'),
+    id: (a, b) => num(a, 'num') - num(b, 'num'),
+  }
+  const state = { filter: 'all', label: '*', sort: 'file' }
   const labelled = (li) => {
     const own = li.dataset.labels ? li.dataset.labels.split(' ') : []
     return state.label === '*' || (state.label === '-' ? !own.length : own.includes(state.label))
@@ -549,6 +580,8 @@ ${sectionHtml}
     for (const b of document.querySelectorAll('[data-filter]')) b.setAttribute('aria-pressed', String(b.dataset.filter === state.filter))
     let any = 0
     for (const section of document.querySelectorAll('[data-section]')) {
+      const list = section.querySelector(':scope > ul')
+      for (const li of [...list.children].sort(orders[state.sort])) list.append(li)
       let shown = 0
       for (const li of section.querySelectorAll('li[data-status]')) {
         li.hidden = !labelled(li) || !show[state.filter](li.dataset.status)
@@ -562,10 +595,12 @@ ${sectionHtml}
     const items = [...document.querySelectorAll('li[data-status]')].filter(labelled)
     for (const n of document.querySelectorAll('[data-n]')) n.textContent = String(items.filter((li) => show[n.dataset.n](li.dataset.status)).length)
     if (picker) picker.value = state.label
-    try { localStorage.setItem(key, state.filter); localStorage.setItem(labelKey, state.label) } catch {}
+    sorter.value = state.sort
+    try { localStorage.setItem(key, state.filter); localStorage.setItem(labelKey, state.label); localStorage.setItem(sortKey, state.sort) } catch {}
   }
   for (const b of document.querySelectorAll('[data-filter]')) b.addEventListener('click', () => { state.filter = b.dataset.filter; apply() })
   picker?.addEventListener('change', () => { state.label = picker.value; apply() })
+  sorter.addEventListener('change', () => { state.sort = sorter.value; apply() })
   const toggle = document.getElementById('all-details')
   toggle?.addEventListener('click', () => {
     const open = toggle.getAttribute('aria-pressed') !== 'true'
@@ -596,6 +631,8 @@ ${sectionHtml}
     if (show[f]) state.filter = f
     const l = localStorage.getItem(labelKey)
     if (picker && [...picker.options].some((o) => o.value === l)) state.label = l
+    const s = localStorage.getItem(sortKey)
+    if (orders[s]) state.sort = s
   } catch {}
   apply()
   // A link to an item (#ABC-4) lands below the sticky bar, and shows the item even when the filter or label hides it.
